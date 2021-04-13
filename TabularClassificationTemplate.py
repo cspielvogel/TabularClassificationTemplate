@@ -52,7 +52,7 @@ from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
 
 
-class PreprocessingPipeline:
+class TabularPreprocessingPipeline:
     def __init__(self):
         self.data = None
         self.k = None
@@ -89,7 +89,7 @@ class PreprocessingPipeline:
         :param data: pandas.DataFrame containing the data to be preprocessed
         :param k: int indicating the k nearest neighbors for kNN-based  imputation
         :param max_missing_ratio: float indicating the maximum ratio of missing to all feature values to keep a feature
-        :return: PreprocessingPipeline fitted with the given parameters
+        :return: TabularPreprocessingPipeline fitted with the given parameters
         """
 
         # Ensure valid parameters
@@ -113,7 +113,7 @@ class PreprocessingPipeline:
 
     def transform(self):
         """
-        Transforming data using the fitted PreprocessingPipeline
+        Transforming data using the fitted TabularPreprocessingPipeline
         :return: pandas.DataFrame with the fitted data
         """
 
@@ -237,7 +237,7 @@ def main():
     print()
 
     # Perform standardized preprocessing
-    preprocessor = PreprocessingPipeline()
+    preprocessor = TabularPreprocessingPipeline()
     df = preprocessor.fit_transform(df)
 
     # Convert non-bleeding labels (2, 3) to non-event (0)
