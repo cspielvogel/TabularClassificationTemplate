@@ -13,20 +13,20 @@ Content:
         - Removing features with too many missing values (>0.2)
         - Filling missing values using kNN imputation
         - TODO: removal of correlated features
-    - Performance estimation using Monte Carlo cross validation with four metrics
+    - Performance estimation using Monte Carlo cross validation with multiple metrics
         - Accuracy
         - AUC
         - Sensitivity
         - Specificity
     - TODO: Feature selection
     - TODO: Hyperparameter optimization
-    - Training and evaluation of four classification algorithms
+    - Training and evaluation of multiple classification algorithms
         - k-nearest neighbors
         - Decision tree
         - Random forest
         - Neural network
     - Visualization of performance evaluation
-        - Barplot with performances for the four classification models
+        - Barplot with performances for the classification models
 
 @author: cspielvogel
 """
