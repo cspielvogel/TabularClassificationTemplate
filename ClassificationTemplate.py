@@ -4,7 +4,7 @@
 """
 Created on Mar 15 13:30 2021
 
-Template for binary classifications including preprocessing
+Template for binary classifications of tabular data including preprocessing
 # TODO: extend to multiclass classifications (metrics!)
 
 Content:
@@ -157,25 +157,68 @@ class PreprocessingPipeline:
         return data
 
 
-# def convert_to_bleeding_prediction(df):
-#     """Change labels to perform binary bleeding/no-bleeding prediction"""
-#     for sample_index in df.index.values:
-#         if df.at[sample_index, "status"] in [2, 3]:
-#             df.at[sample_index, "status"] = 0
-#
-#     return df
+def multiclass_sensitivity(cm):
+    """
+    Calculate sensitivity (=Recall/True positive rate) for confusion matrix with any number of classes
+    :param cm: numpy.ndarray with 2 dimensions indicating the confusion matrix
+               CAVE: Assumes confusion matrix orientation as given by sklearn.metrics.confusion_matrix with actual
+                     classes on the x axis and predictions on the y axis
+               CAVE: For binary classifications, label at index 0 in the confusion matrix is regarded as negative class
+                     and label at index 1 as positive class
+    :return: Float between 0 and 1 indicating the sensitivity
+    """
+
+    # Binary classification
+    if cm.shape == (2, 2):
+        sns = cm[1][1] / (cm[1][1] + cm[1][0])
+
+    # Multiclass classification
+    else:
+        classwise_sns = []
+        for i in np.arange(len(cm)):
+            tp = cm[i][i]
+            fn_and_tp = cm[i, :]
+            if np.sum(fn_and_tp) == 0:
+                classwise_sns.append(0)
+            else:
+                classwise_sns.append(tp / np.sum(fn_and_tp))
+            sns = np.sum(classwise_sns) / len(classwise_sns)
+
+    return sns
 
 
-def sensitivity(cm):
-    """Return sensitivity based on given confusion matrix cm
-       CAVE: assumes negatives at index 0 and positives at index 1 """
-    return cm[1][1] / (cm[1][1] + cm[1][0])
+def multiclass_specificity(cm):
+    """
+    Calculate specificity (=True negative rate) for confusion matrix with any number of classes
+    :param cm: numpy.ndarray with 2 dimensions indicating the confusion matrix
+               CAVE: Assumes confusion matrix orientation as given by sklearn.metrics.confusion_matrix with actual
+                     classes on the x axis and predictions on the y axis
+               CAVE: For binary classifications, label at index 0 in the confusion matrix is regarded as negative class
+                     and label at index 1 as positive class
+    :return: Float between 0 and 1 indicating the sensitivity
+    """
 
+    # Binary classification
+    if cm.shape == (2, 2):
+        spc = cm[0][0] / (cm[0][0] + cm[0][1])
 
-def specificity(cm):
-    """Return specificity based on given confusion matrix cm
-       CAVE: assumes negatives at index 0 and positives at index 1 """
-    return cm[0][0] / (cm[0][0] + cm[0][1])
+    # Multiclass classification
+    else:
+        classwise_spc = []
+        for i in np.arange(len(cm)):
+            t = [cm[j][j] for j in np.arange(len(cm))]
+            del t[i]
+            tn = np.sum(t)
+            f = list(cm[i])
+            del f[i]
+            fp = np.sum(f)
+            if (tn + fp) == 0:
+                classwise_spc.append(0)
+            else:
+                classwise_spc.append(tn / (tn + fp))
+        spc = np.sum(classwise_spc) / len(classwise_spc)
+
+    return spc
 
 
 def main():
