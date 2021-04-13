@@ -157,7 +157,7 @@ class TabularPreprocessingPipeline:
         return data
 
 
-def multiclass_sensitivity(cm):
+def sensitivity(cm):
     """
     Calculate sensitivity (=Recall/True positive rate) for confusion matrix with any number of classes
     :param cm: numpy.ndarray with 2 dimensions indicating the confusion matrix
@@ -187,7 +187,7 @@ def multiclass_sensitivity(cm):
     return sns
 
 
-def multiclass_specificity(cm):
+def specificity(cm):
     """
     Calculate specificity (=True negative rate) for confusion matrix with any number of classes
     :param cm: numpy.ndarray with 2 dimensions indicating the confusion matrix
@@ -227,14 +227,22 @@ def main():
     label_name = "status"
 
     # Specify data location
-    data_path = "Data/df_ML_censored.csv"
+    data_path = "/home/clemens/Classification_blood71/clinical_wlabels.csv"
 
     # Load data to table
-    df = pd.read_csv(data_path, sep=",", index_col=0)
+    df = pd.read_csv(data_path, sep=";", index_col=0)
 
     # Check if any labels are missing
     print("Number of missing values:\n", df.isnull().sum())
     print()
+
+    # Only keep first instance if multiple instances have the same key
+    num_instances_before = len(df)
+    df = df[~df.index.duplicated(keep="first")]
+    num_instances_diff = num_instances_before - len(df)
+    if num_instances_diff > 0:
+        print("Warning: {} instances removed due to duplicate keys - only keeping first occurrence!"
+              .format(num_instances_diff))
 
     # Perform standardized preprocessing
     preprocessor = TabularPreprocessingPipeline()
@@ -348,7 +356,7 @@ def main():
         print("Cumulative CM:\n", cms)
         print("Avg ACC:", avg_acc)
         print("Avg AUC:", avg_auc)
-        print("Avg SNS:", sensitivity(cms))
+        print("Avg SNS:", mu(cms))
         print("Avg SPC:", specificity(cms))
         print()
 
