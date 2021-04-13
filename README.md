@@ -26,4 +26,4 @@ Content:
     - Random forest
     - Neural network
 - Visualization of performance evaluation
-    - Barplot with performances for the four classification models
+    - Barplot with performances for the classification models
