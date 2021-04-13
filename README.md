@@ -1,4 +1,4 @@
-# ClassificationTemplate
+# TabularClassificationTemplate
 
 This project aims to create a template for solving classification problems using Scikit-Learn for
 tabular data.
