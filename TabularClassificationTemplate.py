@@ -221,6 +221,47 @@ def specificity(cm):
     return spc
 
 
+def roc_auc(y_true, y_pred, average="macro"):
+    """
+    Calculation of area under the receiver operating characteristic curve (ROC AUC)
+    Based on Afsan Abdulali Gujarati's solution at
+        https://stackoverflow.com/questions/39685740/calculate-sklearn-roc-auc-score-for-multi-class
+    :param y_true: numpy.ndarray of 1 dimension or list indicating the actual classes for a set of instances
+    :param y_pred: numpy.ndarray of 1 dimension or list indicating the predicted classes for a set of instances
+                   CAVE: Instances must be in the same order as in parameter y_true
+    :param average: String 'micro', 'macro', 'samples' or 'weighted'; default is 'macro'
+                    If None, the scores for each class are returned. Otherwise, this determines the type of averaging
+                    performed on the data: Note: multiclass ROC AUC currently only handles the 'macro' and 'weighted'
+                    averages.
+                    'micro':
+                    Calculate metrics globally by considering each element of the label indicator matrix as a label.
+                    'macro':
+                    Calculate metrics for each label, and find their unweighted mean. This does not take label imbalance
+                     into account.
+                    'weighted':
+                    Calculate metrics for each label, and find their average, weighted by support (the number of true
+                    instances for each label).
+                    'samples':
+                    Calculate metrics for each instance, and find their average.
+                    See also https://scikit-learn.org/stable/modules/generated/sklearn.metrics.roc_auc_score.html
+    :return:
+    """
+    unique_class = set(y_true)
+    roc_auc_dict = {}
+    for per_class in unique_class:
+        other_class = [x for x in unique_class if x != per_class]
+
+        y_true_new = [0 if x in other_class else 1 for x in y_true]
+        y_pred_new = [0 if x in other_class else 1 for x in y_pred]
+
+        roc_auc = roc_auc_score(y_true_new, y_pred_new, average=average)
+        roc_auc_dict[per_class] = roc_auc
+
+    avg_auc = np.sum(list(roc_auc_dict.values())) / len(roc_auc_dict.values())
+
+    return avg_auc
+
+
 def main():
     # Set hyperparameters
     num_folds = 100
@@ -247,9 +288,6 @@ def main():
     # Perform standardized preprocessing
     preprocessor = TabularPreprocessingPipeline()
     df = preprocessor.fit_transform(df)
-
-    # Convert non-bleeding labels (2, 3) to non-event (0)
-    # df = convert_to_bleeding_prediction(df)
 
     # Display bar chart with number of samples per class
     sns.countplot(x="status", data=df)
@@ -334,7 +372,7 @@ def main():
             # Compute performance
             cm = confusion_matrix(y_test, y_pred)
             acc = accuracy_score(y_test, y_pred)
-            auc = roc_auc_score(y_test, y_pred)
+            auc = roc_auc(y_test, y_pred)
 
             # Append performance to fold-wise and overall containers
             cms += cm
