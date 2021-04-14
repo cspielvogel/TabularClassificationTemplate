@@ -157,16 +157,22 @@ class TabularPreprocessingPipeline:
         return data
 
 
-def sensitivity(cm):
+def sensitivity(y_true, y_pred):
     """
     Calculate sensitivity (=Recall/True positive rate) for confusion matrix with any number of classes
-    :param cm: numpy.ndarray with 2 dimensions indicating the confusion matrix
-               CAVE: Assumes confusion matrix orientation as given by sklearn.metrics.confusion_matrix with actual
-                     classes on the x axis and predictions on the y axis
-               CAVE: For binary classifications, label at index 0 in the confusion matrix is regarded as negative class
-                     and label at index 1 as positive class
+    :param y_true: numpy.ndarray of 1 dimension or list indicating the actual classes for a set of instances
+                   CAVE: Instances must be in the same order as in parameter y_pred
+                   CAVE: For binary classifications, class encoded by the numerically smaller integer will be assumed
+                         as negative class while the greater integer will be assumed as positive class
+    :param y_pred: numpy.ndarray of 1 dimension or list indicating the predicted classes for a set of instances
+                   CAVE: Instances must be in the same order as in parameter y_true
+                   CAVE: For binary classifications, class encoded by the numerically smaller integer will be assumed
+                         as negative class while the greater integer will be assumed as positive class
     :return: Float between 0 and 1 indicating the sensitivity
     """
+
+    # Compute confusion matrix
+    cm = confusion_matrix(y_true, y_pred)
 
     # Binary classification
     if cm.shape == (2, 2):
@@ -187,16 +193,22 @@ def sensitivity(cm):
     return sns
 
 
-def specificity(cm):
+def specificity(y_true, y_pred):
     """
     Calculate specificity (=True negative rate) for confusion matrix with any number of classes
-    :param cm: numpy.ndarray with 2 dimensions indicating the confusion matrix
-               CAVE: Assumes confusion matrix orientation as given by sklearn.metrics.confusion_matrix with actual
-                     classes on the x axis and predictions on the y axis
-               CAVE: For binary classifications, label at index 0 in the confusion matrix is regarded as negative class
-                     and label at index 1 as positive class
+    :param y_true: numpy.ndarray of 1 dimension or list indicating the actual classes for a set of instances
+                   CAVE: Instances must be in the same order as in parameter y_pred
+                   CAVE: For binary classifications, class encoded by the numerically smaller integer will be assumed
+                         as negative class while the greater integer will be assumed as positive class
+    :param y_pred: numpy.ndarray of 1 dimension or list indicating the predicted classes for a set of instances
+                   CAVE: Instances must be in the same order as in parameter y_true
+                   CAVE: For binary classifications, class encoded by the numerically smaller integer will be assumed
+                         as negative class while the greater integer will be assumed as positive class
     :return: Float between 0 and 1 indicating the sensitivity
     """
+
+    # Compute confusion matrix
+    cm = confusion_matrix(y_true, y_pred)
 
     # Binary classification
     if cm.shape == (2, 2):
@@ -227,8 +239,13 @@ def roc_auc(y_true, y_pred, average="macro"):
     Based on Afsan Abdulali Gujarati's solution at
         https://stackoverflow.com/questions/39685740/calculate-sklearn-roc-auc-score-for-multi-class
     :param y_true: numpy.ndarray of 1 dimension or list indicating the actual classes for a set of instances
+                   CAVE: Instances must be in the same order as in parameter y_pred
+                   CAVE: For binary classifications, class encoded by the numerically smaller integer will be assumed
+                         as negative class while the greater integer will be assumed as positive class
     :param y_pred: numpy.ndarray of 1 dimension or list indicating the predicted classes for a set of instances
                    CAVE: Instances must be in the same order as in parameter y_true
+                   CAVE: For binary classifications, class encoded by the numerically smaller integer will be assumed
+                         as negative class while the greater integer will be assumed as positive class
     :param average: String 'micro', 'macro', 'samples' or 'weighted'; default is 'macro'
                     If None, the scores for each class are returned. Otherwise, this determines the type of averaging
                     performed on the data: Note: multiclass ROC AUC currently only handles the 'macro' and 'weighted'
