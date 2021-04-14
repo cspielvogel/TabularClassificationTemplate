@@ -5,7 +5,7 @@
 Created on Mar 15 13:30 2021
 
 Template for binary classifications of tabular data including preprocessing
-# TODO: extend to multiclass classifications (metrics!)
+# TODO: Implement object oriented version of main function contents
 
 Content:
     - Preprocessing pipeline
