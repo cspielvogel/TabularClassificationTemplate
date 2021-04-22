@@ -8,7 +8,7 @@ Template for binary classifications of tabular data including preprocessing
 # TODO: Implement object oriented version of main function contents
 
 Content:
-    - TODO: Feature selection
+    - Feature selection
     - TODO: Hyperparameter optimization
     - Training and evaluation of multiple classification algorithms
         - k-nearest neighbors
@@ -35,12 +35,14 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import accuracy_score, confusion_matrix
+from sklearn.feature_selection import f_classif
 
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
 
 from preprocessing import TabularPreprocessingPipeline
 import metrics
+from feature_selection import univariate_feature_selection
 
 
 def main():
@@ -134,6 +136,13 @@ def main():
                                                                 test_size=0.15,
                                                                 stratify=y,
                                                                 random_state=fold_index)
+
+            # Perform (ANOVA) feature selection
+            selected_indices, x_train, x_test = univariate_feature_selection(x_train.values,
+                                                                             y_train.values,
+                                                                             x_test.values,
+                                                                             score_func=f_classif,
+                                                                             num_features="log2n")
 
             # # Random undersampling
             # rus = RandomUnderSampler(random_state=fold_index, sampling_strategy=0.3)
