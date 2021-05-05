@@ -11,8 +11,8 @@ Content:
         - Removing all-NA instances
         - Removing features with too many missing values (>0.2)
         - Filling missing values using kNN imputation
-        - TODO: removal of correlated features
-        - TODO: add fold-wise preprocessing? e.g. resampling
+        - TODO: removal of correlated features (foldwise)
+        - TODO:Resampling e.g. SMOTE
 
 @author: cspielvogel
 """
@@ -104,9 +104,6 @@ class TabularPreprocessingPipeline:
             k = int(np.round(len(data) / 20, 0)) if np.round(len(data) / 20, 0) > 3 else 3
         imputer = KNNImputer(n_neighbors=k)
         data[:] = imputer.fit_transform(data)
-
-        # Removal of correlated features
-        # TODO: insert solution from MUW workstation
 
         return data
 
