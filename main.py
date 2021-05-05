@@ -48,14 +48,15 @@ from feature_selection import univariate_feature_selection
 def main():
     # Set hyperparameters
     num_folds = 100
-    label_name = "Label"
+    # label_name = "Label"
+    label_name = "os24_histo"
 
     # Specify data location
-    data_path = "/home/clemens/Classification_blood71/Data/clinical_wlabels.csv"
+    # data_path = "/home/clemens/Classification_blood71/Data/clinical_wlabels.csv"
+    data_path = "/media/cspielvogel/DataStorage/HNSCC/71pat_raw_features/Master_omics_table/FDB_multi-omics_hnscc_wos24.csv"
 
     # Load data to table
-    df = pd.read_csv(data_path, sep=",", index_col=0)
-    print(df)
+    df = pd.read_csv(data_path, sep=";", index_col=0)
 
     # Check if any labels are missing
     print("Number of missing values:\n", df.isnull().sum())
@@ -82,6 +83,11 @@ def main():
     # Separate data into training and test
     y = df[label_name]
     x = df.drop(label_name, axis="columns")
+
+    # TODO: tmp, remove!
+    for col in x.columns:
+        if col != "Response" and not (col.startswith("largest") or col.startswith("merged") or col.startswith("multi")):
+            x = x.drop(col, axis="columns")
 
     # Get samples per class
     print("Samples per class")
@@ -110,10 +116,7 @@ def main():
                        activation="relu")
 
     clfs = {"kNN": knn, "DT": dt, "RF": rf, "NN": nn}
-    clfs_accs = []
-    clfs_aucs = []
-    clfs_snss = []
-    clfs_spcs = []
+    clfs_performance = {"acc": [], "sns": [], "spc": [], "auc": []}
 
     # Initialize result table
     results = pd.DataFrame(index=list(clfs.keys()))
@@ -121,12 +124,9 @@ def main():
     # Iterate over classifiers
     for clf in clfs:
 
-        # Initialize fold-wise and overall performance containers
+        # Initialize cumulated confusion matrix and fold-wise performance containers
         cms = np.zeros((num_classes, num_classes))
-        accs = []
-        snss = []
-        spcs = []
-        aucs = []
+        performance_foldwise = {"acc": [], "sns": [], "spc": [], "auc": []}
 
         # Iterate over MCCV
         for fold_index in np.arange(num_folds):
@@ -171,30 +171,21 @@ def main():
 
             # Append performance to fold-wise and overall containers
             cms += cm
-            accs.append(acc)
-            snss.append(sns)
-            spcs.append(spc)
-            aucs.append(auc)
+            performance_foldwise["acc"].append(acc)
+            performance_foldwise["sns"].append(sns)
+            performance_foldwise["spc"].append(spc)
+            performance_foldwise["auc"].append(auc)
 
         # Calculate overall performance
-        avg_acc = np.sum(accs) / len(accs)
-        avg_sns = np.sum(snss) / len(snss)
-        avg_spc = np.sum(spcs) / len(spcs)
-        avg_auc = np.sum(aucs) / len(aucs)
-
-        # Append performance to classifier overall performances
-        clfs_accs.append(np.round(avg_acc, 2))
-        clfs_snss.append(np.round(avg_sns, 2))
-        clfs_spcs.append(np.round(avg_spc, 2))
-        clfs_aucs.append(np.round(avg_auc, 2))
+        for metric in performance_foldwise:
+            avg_metric = np.round(np.sum(performance_foldwise[metric]) / len(performance_foldwise[metric]), 2)
+            clfs_performance[metric].append(avg_metric)
 
         # Display overall performances
         print("== {} ==".format(clf))
         print("Cumulative CM:\n", cms)
-        print("Avg ACC:", avg_acc)
-        print("Avg SNS:", avg_sns)
-        print("Avg SPC:", avg_spc)
-        print("Avg AUC:", avg_auc)
+        for metric in clfs_performance:
+            print("Avg {}: {}".format(metric, clfs_performance[metric]))
         print()
 
         # Display confusion matrix
@@ -206,10 +197,8 @@ def main():
         # plt.close()
 
     # Append performance to result table
-    results["ACC"] = clfs_accs
-    results["AUC"] = clfs_aucs
-    results["SPC"] = clfs_spcs
-    results["SNS"] = clfs_snss
+    for metric in clfs_performance:
+        results[metric] = clfs_performance[metric]
 
     # Save result table
     # results.to_csv("Results/performances.csv", sep=";")
