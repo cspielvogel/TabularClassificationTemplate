@@ -55,7 +55,7 @@ def main():
 
     # Specify data location
     # data_path = "/home/clemens/Classification_blood71/Data/clinical_wlabels.csv"
-    data_path = "/media/cspielvogel/DataStorage/HNSCC/71pat_raw_features/Master_omics_table/FDB_multi-omics_hnscc_wos24.csv"
+    data_path = "/media/cspielvogel/DataStorage/HNSCC/71pat_raw_features/Master_omics_table/FDB_multi-omics_hnscc_wos_TESTING-ONLY.csv"
 
     # Load data to table
     df = pd.read_csv(data_path, sep=";", index_col=0)
@@ -73,8 +73,15 @@ def main():
               .format(num_instances_diff))
 
     # Perform standardized preprocessing
+    print(df.shape)
+
     preprocessor = TabularPreprocessor()
     df = preprocessor.fit_transform(df)
+
+    print(df.shape)
+
+    import sys
+    sys.exit()
 
     # Display bar chart with number of samples per class
     # seaborn.countplot(x=label_name, data=df)

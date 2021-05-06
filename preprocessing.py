@@ -9,8 +9,11 @@ Preprocessing functionalities for tabular data classification
 Content:
     - Preprocessing pipeline (to be applied before train/val/test splitting)
         - Removing all-NA instances
+        - Remove constant features
         - Removing features with too many missing values (default > 20% NaNs)
         - TODO: removal of correlated features (foldwise)
+        - TODO: remove samples that have all NA except for label (dropna with thres? for percent missing?)
+        - TODO: remove samples that have no label
 
     - Fold-wise preprocessing pipeline
         - Normalization (standardization per default)
@@ -109,12 +112,20 @@ class TabularPreprocessor:
         assert self.is_fit is True, ".fit() has to be called before transforming any data"
 
         # Removal of instances with only missing values
-        data = self.data.dropna(how="all", axis="rows")
+        print(self.data.index.values)
+        print(self.data.loc[3].values)
+        self.data = self.data.dropna(how="all", axis="rows")
 
         # Remove features with more than given percentage of missing values (self.max_missing_ratio)
-        data = self._remove_partially_missing(axis="columns")
+        self.data = self._remove_partially_missing(axis="columns")
 
-        return data
+        # Remove features with constant value over all instances while ignoring NaNs
+        for column in self.data.columns:
+            if np.all(self.data[column][~np.isnan(self.data[column])].values ==
+                      self.data[column][~np.isnan(self.data[column])].values[0]):
+                self.data = self.data.drop(column, axis="columns")
+
+        return self.data
 
     def fit_transform(self, data):
         """
