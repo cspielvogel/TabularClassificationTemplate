@@ -112,8 +112,6 @@ class TabularPreprocessor:
         assert self.is_fit is True, ".fit() has to be called before transforming any data"
 
         # Removal of instances with only missing values
-        print(self.data.index.values)
-        print(self.data.loc[3].values)
         self.data = self.data.dropna(how="all", axis="rows")
 
         # Remove features with more than given percentage of missing values (self.max_missing_ratio)

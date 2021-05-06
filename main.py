@@ -73,15 +73,8 @@ def main():
               .format(num_instances_diff))
 
     # Perform standardized preprocessing
-    print(df.shape)
-
     preprocessor = TabularPreprocessor()
     df = preprocessor.fit_transform(df)
-
-    print(df.shape)
-
-    import sys
-    sys.exit()
 
     # Display bar chart with number of samples per class
     # seaborn.countplot(x=label_name, data=df)
