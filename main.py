@@ -18,6 +18,8 @@ Content:
     - Visualization of performance evaluation
         - Barplot with performances for the classification models
 
+# TODO: Ensure reproducibility
+
 @author: cspielvogel
 """
 
@@ -40,7 +42,7 @@ from sklearn.feature_selection import f_classif
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
 
-from preprocessing import TabularPreprocessingPipeline
+from preprocessing import TabularPreprocessor, TabularIntraFoldPreprocessor
 import metrics
 from feature_selection import univariate_feature_selection
 
@@ -71,7 +73,7 @@ def main():
               .format(num_instances_diff))
 
     # Perform standardized preprocessing
-    preprocessor = TabularPreprocessingPipeline()
+    preprocessor = TabularPreprocessor()
     df = preprocessor.fit_transform(df)
 
     # Display bar chart with number of samples per class
@@ -137,6 +139,12 @@ def main():
                                                                 stratify=y,
                                                                 random_state=fold_index)
 
+            # Perform standardization and feature imputation
+            intra_fold_preprocessor = TabularIntraFoldPreprocessor(k="automated", normalization="standardize")
+            intra_fold_preprocessor = intra_fold_preprocessor.fit(x_train)
+            x_train = intra_fold_preprocessor.transform(x_train)
+            x_test = intra_fold_preprocessor.transform(x_test)
+
             # Perform (ANOVA) feature selection
             selected_indices, x_train, x_test = univariate_feature_selection(x_train.values,
                                                                              y_train.values,
@@ -185,7 +193,7 @@ def main():
         print("== {} ==".format(clf))
         print("Cumulative CM:\n", cms)
         for metric in clfs_performance:
-            print("Avg {}: {}".format(metric, clfs_performance[metric]))
+            print("Avg {}: {}".format(metric, clfs_performance[metric][-1]))
         print()
 
         # Display confusion matrix
