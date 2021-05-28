@@ -10,9 +10,13 @@ Content:
 
 - Preprocessing pipeline
     - Removing all-NA instances
+    - Removing features with constant value over all instances (ignoring NaNs)
     - Removing features with too many missing values
-    - Filling missing values (using kNN imputation)
-    - Removal of correlated features
+    - Removing correlated features
+- Fold-wise preprocessing pipeline
+    - Normalization (standardization per default)
+    - Filling missing values using kNN imputation
+    - Resampling for handling label imbalances
 - Performance estimation using Monte Carlo cross validation with multiple metrics
     - Accuracy
     - AUC
