@@ -5,11 +5,11 @@
 Created on Apr 15 21:56 2021
 
 Template for binary classifications of tabular data including preprocessing
-# TODO: Implement object oriented version of main function contents
+# TODO: Implement OO version of main function contents
+# TODO: Ensure reproducibility
 
 Content:
     - Feature selection
-    - TODO: Hyperparameter optimization
     - Training and evaluation of multiple classification algorithms
         - k-nearest neighbors
         - Decision tree
@@ -18,7 +18,11 @@ Content:
     - Visualization of performance evaluation
         - Barplot with performances for the classification models
 
-# TODO: Ensure reproducibility
+Input data format specifications:
+    - As of now, a file path has to be supplied to the main function as string value for the variable "data_path";
+    - The file shall be a CSV file separated by a semicolon (;)
+    - The file shall have a header, containing the attribute names and the label name
+    - The file shall have an index column containing a unique identifier for each instance
 
 @author: cspielvogel
 """
@@ -49,12 +53,10 @@ from feature_selection import univariate_feature_selection
 def main():
     # Set hyperparameters
     num_folds = 100
-    # label_name = "Label"
-    label_name = "os24_histo"
+    label_name = "1"
 
     # Specify data location
-    # data_path = "/home/clemens/Classification_blood71/Data/clinical_wlabels.csv"
-    data_path = "/media/cspielvogel/DataStorage/HNSCC/71pat_raw_features/Master_omics_table/FDB_multi-omics_hnscc_wos_TESTING-ONLY.csv"
+    data_path = "Data/test_data.csv"
 
     # Load data to table
     df = pd.read_csv(data_path, sep=";", index_col=0)
@@ -85,11 +87,6 @@ def main():
     y = df[label_name]
     x = df.drop(label_name, axis="columns")
 
-    # TODO: tmp, remove!
-    for col in x.columns:
-        if col != "Response" and not (col.startswith("largest") or col.startswith("merged") or col.startswith("multi")):
-            x = x.drop(col, axis="columns")
-
     # Get samples per class
     print("Samples per class")
     for (label, count) in zip(*np.unique(y, return_counts=True)):
@@ -101,8 +98,8 @@ def main():
 
     # Setup classifiers
     knn = KNeighborsClassifier(weights="distance")
-    knn_param_grid = {"n_neighbors": [val for val in np.round(np.sqrt(x.shape[1])) + np.arange(5) + 1] +
-                                     [val for val in np.round(np.sqrt(x.shape[1])) - np.arange(5) if val >= 1],
+    knn_param_grid = {"n_neighbors": [int(val) for val in np.round(np.sqrt(x.shape[1])) + np.arange(5) + 1] +
+                                     [int(val) for val in np.round(np.sqrt(x.shape[1])) - np.arange(5) if val >= 1],
                       "p": np.arange(1, 5)}
 
     dt = DecisionTreeClassifier()
@@ -137,7 +134,6 @@ def main():
                 {"classifier": nn,
                  "parameters": nn_param_grid}}
 
-    clfs = {"kNN": knn, "DT": dt, "RF": rf, "NN": nn}
     clfs_performance = {"acc": [], "sns": [], "spc": [], "auc": []}
 
     # Initialize result table
@@ -185,8 +181,11 @@ def main():
             model.random_state = fold_index
 
             # Hyperparameter tuning and keep model trained with the best set of hyperparameters
-            optimized_model = RandomizedSearchCV(model, param_distributions=clfs[clf]["parameters"], cv=5)
-            optimized_model.fit(x_train, y_train)   # TODO: set random state
+            optimized_model = RandomizedSearchCV(model,
+                                                 param_distributions=clfs[clf]["parameters"],
+                                                 cv=5,
+                                                 random_state=fold_index)
+            optimized_model.fit(x_train, y_train)
 
             # Predict test data using trained model
             y_pred = optimized_model.predict(x_test)
@@ -230,11 +229,11 @@ def main():
         results[metric] = clfs_performance[metric]
 
     # Save result table
-    # results.to_csv("Results/performances.csv", sep=";")
-    # results.plot.bar(rot=45).legend(loc="upper right")
-    # plt.savefig("Results/performance.png".format(clf))
-    # plt.show()
-    # plt.close()
+    results.to_csv("performances.csv", sep=";")
+    results.plot.bar(rot=45).legend(loc="upper right")
+    plt.savefig("performance.png".format(clf))
+    plt.show()
+    plt.close()
 
 
 if __name__ == "__main__":
