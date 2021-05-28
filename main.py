@@ -26,10 +26,9 @@ import sys
 import numpy as np
 import pandas as pd
 
-import seaborn
 import matplotlib.pyplot as plt
 
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, RandomizedSearchCV
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.neighbors import KNeighborsClassifier
@@ -93,23 +92,43 @@ def main():
     num_classes = len(np.unique(df[label_name].values))
 
     # Setup classifiers
-    knn = KNeighborsClassifier(n_neighbors=7, weights="distance")
+    knn = KNeighborsClassifier(weights="distance")
+    knn_param_grid = {"n_neighbors": [val for val in np.round(np.sqrt(x.shape[1])) + np.arange(5) + 1] +
+                                     [val for val in np.round(np.sqrt(x.shape[1])) - np.arange(5) if val >= 1],
+                      "p": np.arange(1, 5)}
 
-    dt = DecisionTreeClassifier(criterion="entropy",
-                                max_depth=8,
-                                min_samples_leaf=5,
-                                min_samples_split=2)
+    dt = DecisionTreeClassifier()
+    dt_param_grid = {"criterion": ["gini", "entropy"],
+                     "splitter": ["best", "random"],
+                     "max_depth": np.arange(1, 20),
+                     "min_samples_split": [2, 4, 6],
+                     "min_samples_leaf": [1, 3, 5, 6],
+                     "max_features": ["auto", "sqrt", "log2"]}
 
     rf = RandomForestClassifier(n_estimators=100,
                                 criterion="entropy",
                                 max_depth=5,
                                 min_samples_split=5,
                                 min_samples_leaf=2)
+    rf_param_grid = {}
 
     nn = MLPClassifier(hidden_layer_sizes=(32, 64, 32),
                        activation="relu")
+    nn_param_grid = {}
 
-    clfs = {"kNN": knn, "DT": dt, "RF": rf, "NN": nn}
+    clfs = {"knn":
+                {"classifier": knn,
+                 "parameters": knn_param_grid},
+            "dt":
+                {"classifier": dt,
+                 "parameters": dt_param_grid},
+            "rf":
+                {"classifier": rf,
+                 "parameters": rf_param_grid},
+            "nn":
+                {"classifier": nn,
+                 "parameters": nn_param_grid}}
+
     clfs_accs = []
     clfs_aucs = []
     clfs_snss = []
@@ -153,14 +172,15 @@ def main():
             x_train, y_train = smote.fit_resample(x_train, y_train)
 
             # Setup model
-            model = clfs[clf]
+            model = clfs[clf]["classifier"]
             model.random_state = fold_index
 
-            # Train model
-            model.fit(x_train, y_train)
+            # Hyperparameter tuning and keep model trained with the best set of hyperparameters
+            optimized_model = RandomizedSearchCV(model, param_distributions=clfs[clf]["parameters"], cv=5)
+            optimized_model.fit(x_train, y_train)   # TODO: set random state
 
             # Predict test data using trained model
-            y_pred = model.predict(x_test)
+            y_pred = optimized_model.predict(x_test)
 
             # Compute performance
             cm = confusion_matrix(y_test, y_pred)
