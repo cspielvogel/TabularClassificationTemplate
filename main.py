@@ -56,11 +56,14 @@ def main():
     label_name = "1"
 
     # Specify data location
-    data_path = "Data/test_data.csv"
+    # data_path = "Data/test_data.csv"
+
+    data_path = "/home/cspielvogel/Downloads/iris.data"
 
     # Load data to table
-    df = pd.read_csv(data_path, sep=";", index_col=0)
-
+    # df = pd.read_csv(data_path, sep=";", index_col=0)
+    df = pd.read_csv(data_path, sep=";")
+    print(df)
     # Check if any labels are missing
     print("Number of missing values:\n", df.isnull().sum())
     print()
@@ -153,6 +156,7 @@ def main():
             x_train, x_test, y_train, y_test = train_test_split(x, y,
                                                                 test_size=0.15,
                                                                 stratify=y,
+                                                                shuffle=True,
                                                                 random_state=fold_index)
 
             # Perform standardization and feature imputation
