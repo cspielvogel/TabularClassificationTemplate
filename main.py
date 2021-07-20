@@ -53,12 +53,13 @@ from feature_selection import univariate_feature_selection
 def main():
     # Set hyperparameters
     num_folds = 100
-    label_name = "1"
+    label_name = "DFS_histo_median"
+    features_to_remove = ["DFS_histo24", "DFS_histo36"]
 
     # Specify data location
     # data_path = "Data/test_data.csv"
 
-    data_path = "/home/cspielvogel/Downloads/iris.data"
+    data_path = "/home/cspielvogel/ImageAssociationAnalysisKeggPathwayGroups/Data/Dedicaid/fdb_multiomics_w_labels.csv"
 
     # Load data to table
     # df = pd.read_csv(data_path, sep=";", index_col=0)
@@ -67,6 +68,10 @@ def main():
     # Check if any labels are missing
     print("Number of missing values:\n", df.isnull().sum())
     print()
+
+    # Remove features to be removed
+    for col in features_to_remove:
+        df = df.drop(col, axis="columns")
 
     # Only keep first instance if multiple instances have the same key
     num_instances_before = len(df)
@@ -176,9 +181,9 @@ def main():
             # rus = RandomUnderSampler(random_state=fold_index, sampling_strategy=0.3)
             # x_train, y_train = rus.fit_resample(x_train, y_train)
 
-            # SMOTE
-            smote = SMOTE(random_state=fold_index, sampling_strategy=1)
-            x_train, y_train = smote.fit_resample(x_train, y_train)
+            # # SMOTE
+            # smote = SMOTE(random_state=fold_index, sampling_strategy=1)
+            # x_train, y_train = smote.fit_resample(x_train, y_train)
 
             # Setup model
             model = clfs[clf]["classifier"]
