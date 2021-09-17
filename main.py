@@ -6,7 +6,7 @@ Created on Apr 15 21:56 2021
 
 Template for binary classifications of tabular data including preprocessing
 # TODO: Implement OO version of main function contents
-# TODO: Ensure reproducibility
+# TODO: Add output of optimal parameters (?)
 
 Content:
     - Feature selection
@@ -52,18 +52,18 @@ from feature_selection import univariate_feature_selection
 
 def main():
     # Set hyperparameters
-    num_folds = 100
-    label_name = "DFS_histo_median"
-    features_to_remove = ["DFS_histo24", "DFS_histo36"]
+    num_folds = 1
+    label_name = "OS_histo36"
+    features_to_remove = []
 
     # Specify data location
     # data_path = "Data/test_data.csv"
 
-    data_path = "/home/cspielvogel/ImageAssociationAnalysisKeggPathwayGroups/Data/Dedicaid/fdb_multiomics_w_labels.csv"
+    data_path = "/home/cspielvogel/ImageAssociationAnalysisKeggPathwayGroups/Data/Dedicaid/fdb_multiomics_w_labels_bonferroni_significant_publication_OS36.csv"
 
     # Load data to table
-    # df = pd.read_csv(data_path, sep=";", index_col=0)
-    df = pd.read_csv(data_path, sep=";")
+    df = pd.read_csv(data_path, sep=";", index_col=0)
+    # df = pd.read_csv(data_path, sep=";")
     print(df)
     # Check if any labels are missing
     print("Number of missing values:\n", df.isnull().sum())
@@ -111,8 +111,7 @@ def main():
                       "p": np.arange(1, 5)}
 
     dt = DecisionTreeClassifier()
-    dt_param_grid = {"criterion": ["gini", "entropy"],
-                     "splitter": ["best", "random"],
+    dt_param_grid = {"splitter": ["best", "random"],
                      "max_depth": np.arange(1, 20),
                      "min_samples_split": [2, 4, 6],
                      "min_samples_leaf": [1, 3, 5, 6],
@@ -123,10 +122,22 @@ def main():
                                 max_depth=5,
                                 min_samples_split=5,
                                 min_samples_leaf=2)
+    # rf_param_grid = {"n_estimators": [100, 500],
+    #                  "max_depth": np.arange(1, 20),
+    #                  "min_samples_split": [2, 4, 6],
+    #                  "min_samples_leaf": [1, 3, 5, 6],
+    #                  "max_features": ["auto", "sqrt", "log2"]}
     rf_param_grid = {}
 
     nn = MLPClassifier(hidden_layer_sizes=(32, 64, 32),
-                       activation="relu")
+                       activation="relu",
+                       # early_stopping=True,
+                       n_iter_no_change=20,
+                       max_iter=1000)
+
+    # nn_param_grid = {"activation": ["relu", "tanh", "logistic"],
+    #                  "solver": ["adam"],
+    #                  "learning_rate_init": [0.01, 0.001, 0.0001]}
     nn_param_grid = {}
 
     clfs = {"knn":
@@ -201,7 +212,7 @@ def main():
 
             # Compute performance
             cm = confusion_matrix(y_test, y_pred)
-            acc = accuracy_score(y_test, y_pred)
+            acc = metrics.accuracy(y_test, y_pred)
             sns = metrics.sensitivity(y_test, y_pred)
             spc = metrics.specificity(y_test, y_pred)
             auc = metrics.roc_auc(y_test, y_pred)
@@ -218,13 +229,6 @@ def main():
             avg_metric = np.round(np.sum(performance_foldwise[metric]) / len(performance_foldwise[metric]), 2)
             clfs_performance[metric].append(avg_metric)
 
-        # Display overall performances
-        print("== {} ==".format(clf))
-        print("Cumulative CM:\n", cms)
-        for metric in clfs_performance:
-            print("Avg {}: {}".format(metric, clfs_performance[metric][-1]))
-        print()
-
         # Display confusion matrix
         # sns.heatmap(cms, annot=True, cmap="Blues", fmt="g")
         # plt.xlabel("Predicted")
@@ -238,8 +242,20 @@ def main():
         results[metric] = clfs_performance[metric]
 
     # Save result table
+    colors = ["dimgray", "gray", "darkgray", "maroon", "lightgray", "gainsboro"]
     results.to_csv("performances.csv", sep=";")
-    results.plot.bar(rot=45).legend(loc="upper right")
+    results.plot.bar(rot=45, color=colors).legend(loc="upper right")
+
+    print(results)
+
+    # Adjust legend position so it doesn't mask any bars
+    handles = [plt.Rectangle((0, 0), 1, 1, color=color) for color in colors]
+    plt.legend(handles, clfs_performance.keys(), loc="best", bbox_to_anchor=(1.13, 1.15))
+
+    # Save and display performance plot
+    plt.yticks(np.arange(0, 1.1, 0.1))
+    plt.grid(linestyle="dashed", axis="y")
+    plt.title("Overall performance")
     plt.savefig("performance.png".format(clf))
     plt.show()
     plt.close()

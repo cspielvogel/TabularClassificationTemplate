@@ -11,14 +11,31 @@ Content:
         - AUC
         - Sensitivity
         - Specificity
-        - TODO: Accuracy
+        - Accuracy
 
 @author: cspielvogel
 """
 
 import numpy as np
 
-from sklearn.metrics import accuracy_score, confusion_matrix, roc_auc_score
+from sklearn.metrics import confusion_matrix, roc_auc_score
+
+
+def accuracy(y_true, y_pred):
+    """
+    Calculate accuracy for confusion matrix with any number of classes
+    :param y_true: numpy.ndarray of 1 dimension or list indicating the actual classes for a set of instances
+                   CAVE: Instances must be in the same order as in parameter y_pred
+    :param y_pred: numpy.ndarray of 1 dimension or list indicating the predicted classes for a set of instances
+                   CAVE: Instances must be in the same order as in parameter y_true
+    :return: Float between 0 and 1 indicating the accuracy
+    """
+
+    # Compute confusion matrix
+    cm = confusion_matrix(y_true, y_pred)
+
+    # Return accuracy
+    return np.sum(np.diagonal(cm)) / np.sum(cm)
 
 
 def sensitivity(y_true, y_pred):
