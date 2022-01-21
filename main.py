@@ -52,14 +52,14 @@ from feature_selection import univariate_feature_selection
 
 def main():
     # Set hyperparameters
-    num_folds = 1
-    label_name = "OS_histo36"
+    num_folds = 100
+    # label_name = "OS_histo36"
+    label_name = "DPD_final"
     features_to_remove = []
 
     # Specify data location
-    # data_path = "Data/test_data.csv"
-
-    data_path = "/home/cspielvogel/ImageAssociationAnalysisKeggPathwayGroups/Data/Dedicaid/fdb_multiomics_w_labels_bonferroni_significant_publication_OS36.csv"
+    # data_path = "/home/cspielvogel/ImageAssociationAnalysisKeggPathwayGroups/Data/Dedicaid/fdb_multiomics_w_labels_bonferroni_significant_publication_OS36.csv"
+    data_path = "/home/cspielvogel/DataStorage/Bone_scintigraphy/Data/umap_feats_pg.csv"
 
     # Load data to table
     df = pd.read_csv(data_path, sep=";", index_col=0)
