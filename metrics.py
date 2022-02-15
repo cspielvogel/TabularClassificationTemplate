@@ -8,10 +8,11 @@ Performance metrics for tabular data classification
 
 Content:
     - Performance estimation using Monte Carlo cross validation with multiple metrics
-        - AUC
+        - Accuracy
         - Sensitivity
         - Specificity
-        - Accuracy
+        - ROC AUC
+        - ROC distance
 
 @author: cspielvogel
 """
@@ -85,7 +86,7 @@ def specificity(y_true, y_pred):
                    CAVE: Instances must be in the same order as in parameter y_true
                    CAVE: For binary classifications, class encoded by the numerically smaller integer will be assumed
                          as negative class while the greater integer will be assumed as positive class
-    :return: Float between 0 and 1 indicating the sensitivity
+    :return: Float between 0 and 1 indicating the specificity
     """
 
     # Compute confusion matrix
@@ -142,8 +143,9 @@ def roc_auc(y_true, y_pred, average="macro"):
                     'samples':
                     Calculate metrics for each instance, and find their average.
                     See also https://scikit-learn.org/stable/modules/generated/sklearn.metrics.roc_auc_score.html
-    :return:
+    :return: Float between 0 and 1 indicating the ROC AUC
     """
+
     unique_class = set(y_true)
     roc_auc_dict = {}
     for per_class in unique_class:
@@ -158,3 +160,26 @@ def roc_auc(y_true, y_pred, average="macro"):
     avg_auc = np.sum(list(roc_auc_dict.values())) / len(roc_auc_dict.values())
 
     return avg_auc
+
+
+def roc_distance(y_true, y_pred):
+    """
+    Calculation of receiver operating characteristic distance (ROC distance)
+    See: https://doi.org/10.2967/jnumed.117.202267
+    :param y_true: numpy.ndarray of 1 dimension or list indicating the actual classes for a set of instances
+                   CAVE: Instances must be in the same order as in parameter y_pred
+                   CAVE: For binary classifications, class encoded by the numerically smaller integer will be assumed
+                         as negative class while the greater integer will be assumed as positive class
+    :param y_pred: numpy.ndarray of 1 dimension or list indicating the predicted classes for a set of instances
+                   CAVE: Instances must be in the same order as in parameter y_true
+                   CAVE: For binary classifications, class encoded by the numerically smaller integer will be assumed
+                         as negative class while the greater integer will be assumed as positive class
+    :return: Float between 0 and 1 indicating the ROC distance
+    """
+
+    sns = sensitivity(y_true, y_pred)
+    spc = specificity(y_true, y_pred)
+
+    d = np.sqrt(np.power((1-sns), 2) + np.power((1-spc), 2))
+
+    return d
