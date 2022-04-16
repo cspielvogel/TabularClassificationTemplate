@@ -1,6 +1,6 @@
 # TabularClassificationTemplate
 
-![ETA ML](https://github.com/cspielvogel/TabularClassificationTemplate/blob/master/eta-ml.png)
+![ETA ML](https://github.com/cspielvogel/TabularClassificationTemplate/blob/master/eta-ml-logo.png)
 
 This project aims to create a template for solving classification problems using Scikit-Learn for
 tabular data.
