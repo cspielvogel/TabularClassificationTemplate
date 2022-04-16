@@ -33,3 +33,4 @@ Content:
     - Neural network
 - Visualization of performance evaluation
     - Barplot with performances for the classification models
+
