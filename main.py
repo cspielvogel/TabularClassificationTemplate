@@ -8,6 +8,7 @@ Template for binary classifications of tabular data including preprocessing
 # TODO: Implement OO version of main function contents
 # TODO: Add output of optimal parameters (?)
 # TODO: Add global feature importance measurements + visualizations
+# TODO: Add analysis flow diagram to README
 
 Content:
     - Feature selection
