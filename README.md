@@ -1,7 +1,5 @@
 # TabularClassificationTemplate
 
-![ETA ML](https://github.com/cspielvogel/TabularClassificationTemplate/blob/master/eta-ml-logo.png)
-
 This project aims to create a template for solving classification problems using Scikit-Learn for
 tabular data.
 The template shall handle binary as well as multi-class classification problems and shall include
