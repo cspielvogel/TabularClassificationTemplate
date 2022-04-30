@@ -12,6 +12,11 @@ Template for binary classifications of tabular data including preprocessing
 
 # TODO: Add analysis flow diagram to README
 
+# Optional:
+    # TODO: Add local feature importance measurements e.g. SHAPley
+    # TODO: Add exploratory analysis with pandas profiling
+    # TODO: Add surrogate models to identify potential Rashomon effect
+
 Content:
     - Feature selection
     - Training and evaluation of multiple classification algorithms
