@@ -10,7 +10,7 @@ Demo for permutation feature importance measurement for classification purposes
 - Outputs two feature importance bar plots, one based on training, one based on validation data
 """
 
-from sklearn.datasets import load_breast_cancer
+from sklearn.datasets import load_breast_cancer, load_iris
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.inspection import permutation_importance
@@ -88,6 +88,7 @@ def main():
     num_folds = 20
     plot_title = "10-fold MCCV mean feature importance"
     data = load_breast_cancer()
+    # data = load_iris()
     feature_names = data.feature_names
 
     # Initialize fold-wise feature importance containers for mean and standard deviation with zero values
@@ -104,7 +105,11 @@ def main():
         model = RandomForestClassifier(random_state=i).fit(x_train, y_train)
 
         # Compute and display foldwise performance
-        y_pred = model.predict(x_val)
+        if len(np.unique(y_train)) > 2:
+            y_pred = model.predict_proba(x_val)
+        else:
+            y_pred = model.predict(x_val)
+
         model_performance = roc_auc_score(y_val, y_pred, multi_class="ovr")
         print(f"Fold {i+1} AUC: {model_performance:.2}")
 
