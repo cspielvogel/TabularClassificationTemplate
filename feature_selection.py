@@ -8,12 +8,15 @@ Functionalities for feature selection
 Included methods:
     - ANOVA
     - chi squared
+    
+TODO
+    - mRMR feature selection
 
 @author: clemens
 """
 
+import warnings
 from math import log2
-
 import numpy as np
 
 from sklearn.feature_selection import SelectKBest, f_classif, mutual_info_classif
@@ -35,6 +38,9 @@ def univariate_feature_selection(x_train, y_train, x_test, score_func=f_classif,
         features, second contains the subset of selected training feature values and third the subset of selected test
         features
     """
+    
+    # Display interpretability warning
+    warnings.warn("Filter-based selection requires previous removal of redundant features to ensure interpretability. If you have not done so, perform a removal of redundant features or perform mRMR feature selection.")
 
     # Specify number of features to select
     if num_features == "log2n":
