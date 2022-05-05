@@ -14,6 +14,7 @@ Content:
         - TODO: removal of correlated features (foldwise)
         - TODO: remove samples that have all NA except for label (dropna with thres? for percent missing?)
         - TODO: remove samples that have no label
+        - TODO: automatically detect categorical features and convert those to one-hot while normalizing numeric features
 
     - Fold-wise preprocessing pipeline
         - Normalization (standardization per default)
