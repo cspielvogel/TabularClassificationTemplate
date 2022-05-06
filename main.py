@@ -13,7 +13,7 @@ Template for binary classifications of tabular data including preprocessing
 # TODO: Add analysis flow diagram to README
 
 # Optional:
-    # TODO: Add local feature importance measurements e.g. SHAPley
+    # TODO: Add local feature importance measurements e.g. SHAP features
     # TODO: Add exploratory analysis with pandas profiling
     # TODO: Add surrogate models to identify potential Rashomon effect
 
@@ -37,6 +37,7 @@ Input data format specifications:
 """
 
 import sys
+import os
 
 import numpy as np
 import pandas as pd
@@ -50,21 +51,25 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import accuracy_score, confusion_matrix
 from sklearn.feature_selection import f_classif
+from sklearn.inspection import permutation_importance
 
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
 
-from preprocessing import TabularPreprocessor, TabularIntraFoldPreprocessor
 import metrics
-from feature_selection import univariate_feature_selection
+from preprocessing import TabularPreprocessor, TabularIntraFoldPreprocessor
+from feature_selection import univariate_feature_selection, mrmr_feature_selection
+from explainability_tools import plot_importances
 
 
 def main():
     # Set hyperparameters
-    num_folds = 100
-    # label_name = "OS_histo36"
+    num_folds = 5
     label_name = "DPD_final"
     features_to_remove = []
+    verbose = True
+    classifiers_to_run = ["dt"]
+    explainability_result_path = "Results/XAI/"
 
     # Specify data location
     # data_path = "/home/cspielvogel/ImageAssociationAnalysisKeggPathwayGroups/Data/Dedicaid/fdb_multiomics_w_labels_bonferroni_significant_publication_OS36.csv"
@@ -101,8 +106,10 @@ def main():
     # plt.close()
 
     # Separate data into training and test
-    y = df[label_name]
+    # y = df[label_name]
+    y = (df[label_name] < 2) * 1 # TODO: remove
     x = df.drop(label_name, axis="columns")
+    feature_names = x.columns
 
     # Get samples per class
     print("Samples per class")
@@ -111,20 +118,22 @@ def main():
     print()
 
     # Get number of classes
-    num_classes = len(np.unique(df[label_name].values))
+    num_classes = len(np.unique(y))
 
     # Setup classifiers
     knn = KNeighborsClassifier(weights="distance")
-    knn_param_grid = {"n_neighbors": [int(val) for val in np.round(np.sqrt(x.shape[1])) + np.arange(5) + 1] +
-                                     [int(val) for val in np.round(np.sqrt(x.shape[1])) - np.arange(5) if val >= 1],
-                      "p": np.arange(1, 5)}
+    # knn_param_grid = {"n_neighbors": [int(val) for val in np.round(np.sqrt(x.shape[1])) + np.arange(5) + 1] +
+    #                                  [int(val) for val in np.round(np.sqrt(x.shape[1])) - np.arange(5) if val >= 1],
+    #                   "p": np.arange(1, 5)}
+    knn_param_grid = {}
 
     dt = DecisionTreeClassifier()
-    dt_param_grid = {"splitter": ["best", "random"],
-                     "max_depth": np.arange(1, 20),
-                     "min_samples_split": [2, 4, 6],
-                     "min_samples_leaf": [1, 3, 5, 6],
-                     "max_features": ["auto", "sqrt", "log2"]}
+    # dt_param_grid = {"splitter": ["best", "random"],
+    #                  "max_depth": np.arange(1, 20),
+    #                  "min_samples_split": [2, 4, 6],
+    #                  "min_samples_leaf": [1, 3, 5, 6],
+    #                  "max_features": ["auto", "sqrt", "log2"]}
+    dt_param_grid = {}
 
     rf = RandomForestClassifier(n_estimators=100,
                                 criterion="entropy",
@@ -165,10 +174,15 @@ def main():
     clfs_performance = {"acc": [], "sns": [], "spc": [], "auc": []}
 
     # Initialize result table
-    results = pd.DataFrame(index=list(clfs.keys()))
+    results = pd.DataFrame()    # index=list(clfs.keys()))
 
     # Iterate over classifiers
     for clf in clfs:
+        if clf not in classifiers_to_run:
+            continue
+
+        if verbose is True:
+            print(f"Starting training for {clf}..")
 
         # Initialize cumulated confusion matrix and fold-wise performance containers
         cms = np.zeros((num_classes, num_classes))
@@ -191,16 +205,16 @@ def main():
             x_test = intra_fold_preprocessor.transform(x_test)
 
             # Perform (ANOVA) feature selection
-            selected_indices, x_train, x_test = univariate_feature_selection(x_train.values,
-                                                                             y_train.values,
-                                                                             x_test.values,
-                                                                             score_func=f_classif,
-                                                                             num_features="log2n")
+            selected_indices, x_train, x_test = mrmr_feature_selection(x_train.values,
+                                                                       y_train.values,
+                                                                       x_test.values,
+                                                                       # score_func=f_classif,
+                                                                       num_features="log2n")
 
             # # Random undersampling
             # rus = RandomUnderSampler(random_state=fold_index, sampling_strategy=0.3)
             # x_train, y_train = rus.fit_resample(x_train, y_train)
-
+            #
             # # SMOTE
             # smote = SMOTE(random_state=fold_index, sampling_strategy=1)
             # x_train, y_train = smote.fit_resample(x_train, y_train)
@@ -216,8 +230,40 @@ def main():
                                                  random_state=fold_index)
             optimized_model.fit(x_train, y_train)
 
-            # Predict test data using trained model
-            y_pred = optimized_model.predict(x_test)
+            # Compute and display fold-wise performance
+            if len(np.unique(y_train)) > 2:
+                y_pred = optimized_model.predict_proba(x_test)
+            else:
+                y_pred = optimized_model.predict(x_test)
+
+            # Compute permutation feature importance scores on training and validation data
+            raw_importances_train = permutation_importance(optimized_model, x_test, y_test,
+                                                           n_repeats=30,
+                                                           scoring="roc_auc_ovr",
+                                                           n_jobs=10,  # TODO: adjust and automate
+                                                           random_state=fold_index)
+            raw_importances_val = permutation_importance(optimized_model, x_train, y_train,
+                                                         n_repeats=30,
+                                                         scoring="roc_auc_ovr",
+                                                         n_jobs=10,  # TODO: adjust and automate
+                                                         random_state=fold_index)
+
+            # Initialize fold-wise feature importance containers for mean and standard deviation with zero values
+            if "raw_importances_foldwise_mean_train" not in locals():
+                feature_names = feature_names[selected_indices]
+                raw_importances_foldwise_mean_train = np.zeros((len(feature_names),))
+                raw_importances_foldwise_std_train = np.zeros((len(feature_names),))
+                raw_importances_foldwise_mean_val = np.zeros((len(feature_names),))
+                raw_importances_foldwise_std_val = np.zeros((len(feature_names),))
+
+            # Add importance scores to overall container
+            raw_importances_foldwise_mean_train += raw_importances_train.importances_mean
+            raw_importances_foldwise_std_train += raw_importances_train.importances_std
+            raw_importances_foldwise_mean_val += raw_importances_val.importances_mean
+            raw_importances_foldwise_std_val += raw_importances_val.importances_std
+
+            # # Predict test data using trained model   # TODO: check if this works for multi class classif
+            # y_pred = optimized_model.predict(x_test)
 
             # Compute performance
             cm = confusion_matrix(y_test, y_pred)
@@ -233,10 +279,44 @@ def main():
             performance_foldwise["spc"].append(spc)
             performance_foldwise["auc"].append(auc)
 
+        # Get mean of feature importance scores and standard deviation over all folds
+        overall_mean_importances_train = raw_importances_foldwise_mean_train / num_folds
+        overall_std_importances_train = raw_importances_foldwise_std_train / num_folds
+        overall_mean_importances_val = raw_importances_foldwise_mean_val / num_folds
+        overall_std_importances_val = raw_importances_foldwise_std_val / num_folds
+
+        # Plot feature importances as determined using training and validation data
+        plot_title_permutation_importance = f"Permutation importance {clf} "
+        plot_importances(importances_mean=overall_mean_importances_train,
+                         importances_std=overall_std_importances_train,
+                         feature_names=feature_names,
+                         plot_title=plot_title_permutation_importance + " - Training data",
+                         order_alphanumeric=True,
+                         include_top=0,
+                         display_plots=True,
+                         save_path=os.path.join(explainability_result_path,
+                                                plot_title_permutation_importance + "-train")
+                         )
+
+        plot_importances(importances_mean=overall_mean_importances_val,
+                         importances_std=overall_std_importances_val,
+                         feature_names=feature_names,
+                         plot_title=plot_title_permutation_importance + " - Validation data",
+                         order_alphanumeric=True,
+                         include_top=0,
+                         display_plots=True,
+                         save_path=os.path.join(explainability_result_path,
+                                                plot_title_permutation_importance + "-test")
+                         )
+
         # Calculate overall performance
         for metric in performance_foldwise:
             avg_metric = np.round(np.sum(performance_foldwise[metric]) / len(performance_foldwise[metric]), 2)
             clfs_performance[metric].append(avg_metric)
+
+        if verbose is True:
+            print(f"Finished {clf} with MCCV-wide confusion matrix:")
+            print(cms)
 
         # Display confusion matrix
         # sns.heatmap(cms, annot=True, cmap="Blues", fmt="g")

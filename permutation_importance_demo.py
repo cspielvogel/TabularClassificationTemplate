@@ -22,7 +22,8 @@ import pandas as pd
 import numpy as np
 
 
-def plot_importances(importances_mean, importances_std, feature_names, plot_title, order_alphanumeric=True, include_top=0):
+def plot_importances(importances_mean, importances_std, feature_names, plot_title, order_alphanumeric=True,
+                     include_top=0, display_plots=True, save_path=None):
     """
     Create barplot of feature importances
 
@@ -32,6 +33,8 @@ def plot_importances(importances_mean, importances_std, feature_names, plot_titl
     :param str plot_title: Indicating title as header over plot
     :param bool order_alphanumeric: Indicating whether to sort features alphanumerically in barplot; Keeps order if False
     :param int include_top: Number of features to include in the plot ordered by highest importance; All if 0
+    :param bool display_plots: If True, show plots on creation time
+    :param str save_path: Indicate path to save plots to; If None, plots are not saved
     :return: pandas.DataFrame with formatted mean and standard deviation for feature importances
     """
 
@@ -78,7 +81,13 @@ def plot_importances(importances_mean, importances_std, feature_names, plot_titl
     plt.gcf().subplots_adjust(bottom=0.50)
     plt.subplots_adjust(bottom=0.50)
 
-    plt.show()
+    if save_path is not None:
+        # Save plot
+        plt.savefig(save_path)
+
+    if display_plots is True:
+        # Display plot
+        plt.show()
 
     return importance_df
 
@@ -104,7 +113,7 @@ def main():
 
         model = RandomForestClassifier(random_state=i).fit(x_train, y_train)
 
-        # Compute and display foldwise performance
+        # Compute and display fold-wise performance
         if len(np.unique(y_train)) > 2:
             y_pred = model.predict_proba(x_val)
         else:
@@ -148,7 +157,7 @@ def main():
     plot_importances(importances_mean=overall_mean_importances_val,
                      importances_std=overall_std_importances_val,
                      feature_names=feature_names,
-                     plot_title=plot_title + " - Validation data",
+                     plot_title=plot_title + " - Test data",
                      order_alphanumeric=True,
                      include_top=0)
 

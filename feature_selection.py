@@ -23,7 +23,7 @@ from sklearn.feature_selection import SelectKBest, f_classif, mutual_info_classi
 from mrmr import mrmr_classif
 
 
-def mrmr_feature_selection(x_train, y_train, x_test, num_features):
+def mrmr_feature_selection(x_train, y_train, x_test=None, num_features="log2n"):
     """
     minimum Redundancy Maximum Relevance feature selection
 
@@ -48,7 +48,8 @@ def mrmr_feature_selection(x_train, y_train, x_test, num_features):
 
     selected_features = mrmr_classif(X=x_train,
                                      y=y_train,
-                                     K=num_features)
+                                     K=num_features,
+                                     show_progress=False)
 
     index_selected = [x_train.columns.tolist().index(feat_name) for feat_name in selected_features]
 
@@ -58,7 +59,7 @@ def mrmr_feature_selection(x_train, y_train, x_test, num_features):
     return index_selected, x_train_selected, x_test_selected
 
 
-def univariate_feature_selection(x_train, y_train, x_test, score_func=f_classif, num_features="log2n"):
+def univariate_feature_selection(x_train, y_train, x_test=None, score_func=f_classif, num_features="log2n"):
     """
     Univariate feature selection using analysis of variance inference test
     :param x_train: numpy.ndarray with 2 dimensions, containing the training feature values
