@@ -6,6 +6,8 @@ The template shall handle binary as well as multi-class classification problems 
 a preprocessing pipeline. Further, the template shall be easily adaptable and extendible for an
 easy integration into larger machine learning workflows.
 
+![Workflow diagram](Assets/txt_flow_details.png)
+
 Content:
 
 - Preprocessing pipeline
