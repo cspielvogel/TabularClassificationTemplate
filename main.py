@@ -9,8 +9,10 @@ Template for binary classifications of tabular data including preprocessing
 # TODO: Add output of optimal parameters (?)
 # TODO: Add permutation feature importance measurements + visualizations
 # TODO: Add one way partial dependence plots and maybe two way for top features
-
+# TODO: Add confusion matrix plot / table to output
 # TODO: Add analysis flow diagram to README
+# TODO: Add commandline options /w argparse
+# TODO: Add option for output path
 
 # Optional:
     # TODO: Add local feature importance measurements e.g. SHAP features
@@ -56,6 +58,8 @@ from sklearn.inspection import permutation_importance
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
 
+from pandas_profiling import ProfileReport
+
 import metrics
 from preprocessing import TabularPreprocessor, TabularIntraFoldPreprocessor
 from feature_selection import univariate_feature_selection, mrmr_feature_selection
@@ -68,7 +72,7 @@ def main():
     label_name = "DPD_final"
     features_to_remove = []
     verbose = True
-    classifiers_to_run = ["dt"]
+    classifiers_to_run = ["dt", "knn", "rf", "nn"]
     explainability_result_path = "Results/XAI/"
 
     # Specify data location
@@ -120,19 +124,24 @@ def main():
     # Get number of classes
     num_classes = len(np.unique(y))
 
+    # Create and save EDA via Pandas Profiling
+    profile = ProfileReport(df, title="Pandas Profiling Report", explorative=True)
+    os.makedirs("Results/EDA/", exist_ok=True)
+    profile.to_file("Results/EDA/exploratory_data_analysis.html")
+
     # Setup classifiers
     knn = KNeighborsClassifier(weights="distance")
-    # knn_param_grid = {"n_neighbors": [int(val) for val in np.round(np.sqrt(x.shape[1])) + np.arange(5) + 1] +
-    #                                  [int(val) for val in np.round(np.sqrt(x.shape[1])) - np.arange(5) if val >= 1],
-    #                   "p": np.arange(1, 5)}
+    knn_param_grid = {"n_neighbors": [int(val) for val in np.round(np.sqrt(x.shape[1])) + np.arange(5) + 1] +
+                                     [int(val) for val in np.round(np.sqrt(x.shape[1])) - np.arange(5) if val >= 1],
+                      "p": np.arange(1, 5)}
     knn_param_grid = {}
 
     dt = DecisionTreeClassifier()
-    # dt_param_grid = {"splitter": ["best", "random"],
-    #                  "max_depth": np.arange(1, 20),
-    #                  "min_samples_split": [2, 4, 6],
-    #                  "min_samples_leaf": [1, 3, 5, 6],
-    #                  "max_features": ["auto", "sqrt", "log2"]}
+    dt_param_grid = {"splitter": ["best", "random"],
+                     "max_depth": np.arange(1, 20),
+                     "min_samples_split": [2, 4, 6],
+                     "min_samples_leaf": [1, 3, 5, 6],
+                     "max_features": ["auto", "sqrt", "log2"]}
     dt_param_grid = {}
 
     rf = RandomForestClassifier(n_estimators=100,
@@ -140,16 +149,16 @@ def main():
                                 max_depth=5,
                                 min_samples_split=5,
                                 min_samples_leaf=2)
-    # rf_param_grid = {"n_estimators": [100, 500],
-    #                  "max_depth": np.arange(1, 20),
-    #                  "min_samples_split": [2, 4, 6],
-    #                  "min_samples_leaf": [1, 3, 5, 6],
-    #                  "max_features": ["auto", "sqrt", "log2"]}
+    rf_param_grid = {"n_estimators": [100, 500],
+                     "max_depth": np.arange(1, 20),
+                     "min_samples_split": [2, 4, 6],
+                     "min_samples_leaf": [1, 3, 5, 6],
+                     "max_features": ["auto", "sqrt", "log2"]}
     rf_param_grid = {}
 
     nn = MLPClassifier(hidden_layer_sizes=(32, 64, 32),
                        activation="relu",
-                       # early_stopping=True,
+                       early_stopping=True,
                        n_iter_no_change=20,
                        max_iter=1000)
 
@@ -174,7 +183,7 @@ def main():
     clfs_performance = {"acc": [], "sns": [], "spc": [], "auc": []}
 
     # Initialize result table
-    results = pd.DataFrame()    # index=list(clfs.keys()))
+    results = pd.DataFrame(index=classifiers_to_run)    # index=list(clfs.keys()))
 
     # Iterate over classifiers
     for clf in clfs:
