@@ -20,6 +20,7 @@ Content:
         - Normalization (standardization per default)
         - Filling missing values using kNN imputation
         - TODO:Resampling e.g. SMOTE
+        - Normalize only numeric features and one-hot encode categorical features
 
 @author: cspielvogel
 """
