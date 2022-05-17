@@ -111,7 +111,7 @@ def main():
 
     # Separate data into training and test
     # y = df[label_name]
-    y = (df[label_name] < 2) * 1 # TODO: remove
+    y = (df[label_name] < 2) * 1    # TODO: remove
     x = df.drop(label_name, axis="columns")
     feature_names = x.columns
 
