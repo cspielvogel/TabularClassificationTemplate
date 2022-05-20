@@ -3,8 +3,8 @@
 This project aims to create a template for solving classification problems using Scikit-Learn for
 tabular data.
 The template shall handle binary as well as multi-class classification problems and shall include
-a preprocessing pipeline. Further, the template shall be easily adaptable and extendible for an
-easy integration into larger machine learning workflows.
+a preprocessing pipeline. Further, the template shall be easily adaptable and extendible for a
+simple integration into larger machine learning workflows.
 
 <!---
 <img src="Assets/tct_workflow_details.png" alt="Workflow diagram" width="600"/>
@@ -33,6 +33,9 @@ Content:
     - Decision tree
     - Random forest
     - Neural network
+- Explainable Artificial Intelligence (XAI)
+    - Permutations feature importance
+    - Partial dependence plots
 - Visualization of performance evaluation
     - Barplot with performances for the classification models
 
