@@ -9,6 +9,7 @@ Includes:
     - Permutation feature importance (for train and test data)
 TODO:
     - Partial dependence plots
+    - SHAP (summary plot, force plot, heatmap, others?)
 
 @author: cspielvogel
 """
