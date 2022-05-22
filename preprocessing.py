@@ -121,9 +121,14 @@ class TabularPreprocessor:
 
         # Remove features with constant value over all instances while ignoring NaNs
         for column in self.data.columns:
-            if np.all(self.data[column][~np.isnan(self.data[column])].values ==
-                      self.data[column][~np.isnan(self.data[column])].values[0]):
-                self.data = self.data.drop(column, axis="columns")
+            if self.data[column].dtype == "int64":
+                if np.all(self.data[column][~np.isnan(self.data[column])].values ==
+                          self.data[column][~np.isnan(self.data[column])].values[0]):
+                    self.data = self.data.drop(column, axis="columns")
+            else:
+                if np.all(np.array([i for i in self.data[column] if not i in ['nan', np.nan]]) ==
+                          self.data[column].values[0]):
+                    self.data = self.data.drop(column, axis="columns")
 
         return self.data
 

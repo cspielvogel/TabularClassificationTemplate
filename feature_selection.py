@@ -44,7 +44,9 @@ def mrmr_feature_selection(x_train, y_train, x_test=None, num_features="log2n"):
         num_features = int(np.round(np.sqrt(x_train.shape[1])))
 
     x_train = pd.DataFrame(x_train.copy())
-    x_test = pd.DataFrame(x_test.copy())
+
+    if x_test is not None:
+        x_test = pd.DataFrame(x_test.copy())
 
     selected_features = mrmr_classif(X=x_train,
                                      y=y_train,
@@ -54,9 +56,11 @@ def mrmr_feature_selection(x_train, y_train, x_test=None, num_features="log2n"):
     index_selected = [x_train.columns.tolist().index(feat_name) for feat_name in selected_features]
 
     x_train_selected = x_train[index_selected].values
-    x_test_selected = x_test[index_selected].values
 
-    return index_selected, x_train_selected, x_test_selected
+    if x_test is not None:
+        x_test = x_test[index_selected].values
+
+    return index_selected, x_train_selected, x_test
 
 
 def univariate_feature_selection(x_train, y_train, x_test=None, score_func=f_classif, num_features="log2n"):

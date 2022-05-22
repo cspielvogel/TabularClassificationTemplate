@@ -90,6 +90,7 @@ def plot_importances(importances_mean, importances_std, feature_names, plot_titl
         # Save plot
         os.makedirs("/".join(save_path.split("/")[:-1]), exist_ok=True)
         plt.savefig(save_path)
+        plt.close()
 
     if display_plots is True:
         # Display plot

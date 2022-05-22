@@ -7,17 +7,14 @@ Created on Apr 15 21:56 2021
 Template for binary classifications of tabular data including preprocessing
 # TODO: Implement OO version of main function contents
 # TODO: Add output of optimal parameters (?)
-# TODO: Add permutation feature importance measurements + visualizations
 # TODO: Add one way partial dependence plots and maybe two way for top features
 # TODO: Add confusion matrix plot / table to output
 # TODO: Add analysis flow diagram to README
 # TODO: Add commandline options /w argparse
 # TODO: Add option for output path
-
-# Optional:
-    # TODO: Add local feature importance measurements e.g. SHAP features
-    # TODO: Add exploratory analysis with pandas profiling
-    # TODO: Add surrogate models to identify potential Rashomon effect
+# TODO: Test SHAP for multiclass prediction
+# TODO: Add UMAP to EDA (color by label)
+# TODO: Update content below
 
 Content:
     - Feature selection
@@ -44,6 +41,7 @@ import pickle
 
 import numpy as np
 import pandas as pd
+import seaborn
 
 import matplotlib.pyplot as plt
 
@@ -60,6 +58,7 @@ from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
 
 from pandas_profiling import ProfileReport
+import shap
 
 import metrics
 from preprocessing import TabularPreprocessor, TabularIntraFoldPreprocessor
@@ -99,7 +98,7 @@ def main():
         print("Warning: {} instances removed due to duplicate keys - only keeping first occurrence!"
               .format(num_instances_diff))
 
-    # Perform standardized preprocessing
+    # Perform standardized preprocessing    # TODO: remove any columns with missing label, otherwise preproc fails!
     preprocessor = TabularPreprocessor()
     df = preprocessor.fit_transform(df)
 
@@ -109,11 +108,23 @@ def main():
     x = df.drop(label_name, axis="columns")
     feature_names = x.columns
 
+    # Preprocess data for creation of final model
+
+    # Perform standardization and feature imputation
+    intra_fold_preprocessor = TabularIntraFoldPreprocessor(k="automated", normalization="standardize")
+    x_preprocessed = intra_fold_preprocessor.fit_transform(x)
+
+    # Perform feature selection
+    selected_indices_preprocessed, x_preprocessed, _ = mrmr_feature_selection(x_preprocessed.values,
+                                                                                           y.values,
+                                                                                           # score_func=f_classif,
+                                                                                           num_features="log2n")
+
     # Get number of classes
     num_classes = len(np.unique(y))
 
     # Create and save EDA via Pandas Profiling
-    profile = ProfileReport(df, title="Pandas Profiling Report", explorative=True)
+    profile = ProfileReport(df, title="Pandas Profiling Report", minimal=True)
     os.makedirs("Results/EDA/", exist_ok=True)
     profile.to_file("Results/EDA/exploratory_data_analysis.html")
 
@@ -150,9 +161,9 @@ def main():
                        n_iter_no_change=20,
                        max_iter=1000)
 
-    # nn_param_grid = {"activation": ["relu", "tanh", "logistic"],
-    #                  "solver": ["adam"],
-    #                  "learning_rate_init": [0.01, 0.001, 0.0001]}
+    nn_param_grid = {"activation": ["relu", "tanh", "logistic"],
+                     "solver": ["adam"],
+                     "learning_rate_init": [0.01, 0.001, 0.0001]}
     nn_param_grid = {}
 
     clfs = {"knn":
@@ -201,14 +212,14 @@ def main():
             x_train = intra_fold_preprocessor.transform(x_train)
             x_test = intra_fold_preprocessor.transform(x_test)
 
-            # Perform (ANOVA) feature selection
+            # Perform feature selection
             selected_indices, x_train, x_test = mrmr_feature_selection(x_train.values,
                                                                        y_train.values,
                                                                        x_test.values,
                                                                        # score_func=f_classif,
                                                                        num_features="log2n")
 
-            # # Random undersampling
+            # # Random undersampling    # TODO: evaluate for performance improvement and reactivate
             # rus = RandomUnderSampler(random_state=fold_index, sampling_strategy=0.3)
             # x_train, y_train = rus.fit_resample(x_train, y_train)
             #
@@ -229,9 +240,9 @@ def main():
 
             # Compute and display fold-wise performance
             if len(np.unique(y_train)) > 2:
-                y_pred = optimized_model.predict_proba(x_test)
-            else:
                 y_pred = optimized_model.predict(x_test)
+            else:
+                y_pred = optimized_model.predict_proba(x_test)
 
             # Compute permutation feature importance scores on training and validation data
             raw_importances_train = permutation_importance(optimized_model, x_test, y_test,
@@ -286,7 +297,7 @@ def main():
                                              param_distributions=clfs[clf]["parameters"],
                                              cv=10,
                                              random_state=seed)
-        optimized_model.fit(x_train, y_train)
+        optimized_model.fit(x_preprocessed, y)
 
         # Save final model to file
         if not os.path.exists(model_result_path):
@@ -294,6 +305,19 @@ def main():
 
         with open(os.path.join(model_result_path, f"{clf}_model.pickle"), "wb") as file:
             pickle.dump(optimized_model, file)
+
+        # SHAP analysis
+        explainer = shap.KernelExplainer(optimized_model.best_estimator_.predict, x_preprocessed)
+        shap_values = explainer.shap_values(x_preprocessed)
+        shap.summary_plot(shap_values=shap_values,
+                          features=x_preprocessed,
+                          plot_type="dot",
+                          feature_names=feature_names,
+                          show=False)
+        plt.subplots_adjust(bottom=0.15)
+        plt.savefig(os.path.join(explainability_result_path, f"shap_summary-{clf}.png"),
+                    bbox_inches="tight")
+        plt.close()
 
         # Get mean of feature importance scores and standard deviation over all folds
         overall_mean_importances_train = raw_importances_foldwise_mean_train / num_folds
@@ -313,7 +337,7 @@ def main():
                          plot_title=plot_title_permutation_importance + " - Training data",
                          order_alphanumeric=True,
                          include_top=0,
-                         display_plots=True,
+                         display_plots=False,
                          save_path=os.path.join(explainability_result_path,
                                                 plot_title_permutation_importance + "-train")
                          )
@@ -324,7 +348,7 @@ def main():
                          plot_title=plot_title_permutation_importance + " - Validation data",
                          order_alphanumeric=True,
                          include_top=0,
-                         display_plots=True,
+                         display_plots=False,
                          save_path=os.path.join(explainability_result_path,
                                                 plot_title_permutation_importance + "-test")
                          )
@@ -338,13 +362,13 @@ def main():
             print(f"Finished {clf} with MCCV-wide confusion matrix:")
             print(cms)
 
-        # Display confusion matrix
-        # sns.heatmap(cms, annot=True, cmap="Blues", fmt="g")
-        # plt.xlabel("Predicted")
-        # plt.ylabel("Actual")
-        # plt.title("{} - Confusion matrix".format(clf))
-        # plt.savefig("Results/confusion_matrix-{}.png".format(clf))
-        # plt.close()
+        # Display confusion matrix  # TODO: evaluate
+        seaborn.heatmap(cms, annot=True, cmap="Blues", fmt="g")
+        plt.xlabel("Predicted")
+        plt.ylabel("Actual")
+        plt.title("{} - Confusion matrix".format(clf))
+        plt.savefig(os.path.join(performance_save_path, f"confusion_matrix-{clf}.png"))
+        plt.close()
 
     # Append performance to result table
     for metric in clfs_performance:
@@ -369,7 +393,6 @@ def main():
     plt.grid(linestyle="dashed", axis="y")
     plt.title("Overall performance")
     plt.savefig(os.path.join(performance_save_path, "performance.png".format(clf)))
-    plt.show()
     plt.close()
 
 
