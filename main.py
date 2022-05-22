@@ -77,6 +77,7 @@ def main():
     classifiers_to_run = ["dt", "knn", "rf", "nn"]
     explainability_result_path = "Results/XAI/"
     model_result_path = "Results/Models/"
+    performance_save_path = "Results/Performance/"
 
     # Specify data location
     # data_path = "/home/cspielvogel/ImageAssociationAnalysisKeggPathwayGroups/Data/Dedicaid/fdb_multiomics_w_labels_bonferroni_significant_publication_OS36.csv"
@@ -350,8 +351,11 @@ def main():
         results[metric] = clfs_performance[metric]
 
     # Save result table
+    if not os.path.exists(performance_save_path):
+        os.makedirs(performance_save_path)
+
     colors = ["dimgray", "gray", "darkgray", "maroon", "lightgray", "gainsboro"]
-    results.to_csv("performances.csv", sep=";")
+    results.to_csv(os.path.join(performance_save_path, "performances.csv"), sep=";")
     results.plot.bar(rot=45, color=colors).legend(loc="upper right")
 
     print(results)
@@ -364,7 +368,7 @@ def main():
     plt.yticks(np.arange(0, 1.1, 0.1))
     plt.grid(linestyle="dashed", axis="y")
     plt.title("Overall performance")
-    plt.savefig("performance.png".format(clf))
+    plt.savefig(os.path.join(performance_save_path, "performance.png".format(clf)))
     plt.show()
     plt.close()
 
