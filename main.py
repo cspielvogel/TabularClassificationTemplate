@@ -40,6 +40,7 @@ Input data format specifications:
 
 import sys
 import os
+import pickle
 
 import numpy as np
 import pandas as pd
@@ -69,23 +70,21 @@ from explainability_tools import plot_importances
 def main():
     # Set hyperparameters
     num_folds = 5
-    label_name = "DPD_final"
+    # label_name = "DPD_final"
+    label_name = "1"
     features_to_remove = []
     verbose = True
     classifiers_to_run = ["dt", "knn", "rf", "nn"]
     explainability_result_path = "Results/XAI/"
+    model_result_path = "Results/Models/"
 
     # Specify data location
     # data_path = "/home/cspielvogel/ImageAssociationAnalysisKeggPathwayGroups/Data/Dedicaid/fdb_multiomics_w_labels_bonferroni_significant_publication_OS36.csv"
-    data_path = "/home/cspielvogel/DataStorage/Bone_scintigraphy/Data/umap_feats_pg.csv"
+    # data_path = "/home/cspielvogel/DataStorage/Bone_scintigraphy/Data/umap_feats_pg.csv"
+    data_path = r"C:\Users\cspielvogel\PycharmProjects\TabularClassificationTemplate\Data\test_data.csv"
 
     # Load data to table
     df = pd.read_csv(data_path, sep=";", index_col=0)
-    # df = pd.read_csv(data_path, sep=";")
-    print(df)
-    # Check if any labels are missing
-    print("Number of missing values:\n", df.isnull().sum())
-    print()
 
     # Remove features to be removed
     for col in features_to_remove:
@@ -103,23 +102,11 @@ def main():
     preprocessor = TabularPreprocessor()
     df = preprocessor.fit_transform(df)
 
-    # Display bar chart with number of samples per class
-    # seaborn.countplot(x=label_name, data=df)
-    # plt.title("Original class frequencies")
-    # plt.savefig("Results/original_class_frequencies.png")
-    # plt.close()
-
     # Separate data into training and test
-    # y = df[label_name]
-    y = (df[label_name] < 2) * 1    # TODO: remove
+    y = df[label_name]
+    # y = (df[label_name] < 2) * 1    # TODO: remove; only for PG classification
     x = df.drop(label_name, axis="columns")
     feature_names = x.columns
-
-    # Get samples per class
-    print("Samples per class")
-    for (label, count) in zip(*np.unique(y, return_counts=True)):
-        print("{}: {}".format(label, count))
-    print()
 
     # Get number of classes
     num_classes = len(np.unique(y))
@@ -142,7 +129,7 @@ def main():
                      "min_samples_split": [2, 4, 6],
                      "min_samples_leaf": [1, 3, 5, 6],
                      "max_features": ["auto", "sqrt", "log2"]}
-    dt_param_grid = {}
+    dt_param_grid = {}  # TODO: reactivate parameter grids
 
     rf = RandomForestClassifier(n_estimators=100,
                                 criterion="entropy",
@@ -288,11 +275,34 @@ def main():
             performance_foldwise["spc"].append(spc)
             performance_foldwise["auc"].append(auc)
 
+        # Setup final model
+        seed = 0
+        model = clfs[clf]["classifier"]
+        model.random_state = seed
+
+        # Hyperparameter tuning for final model
+        optimized_model = RandomizedSearchCV(model,
+                                             param_distributions=clfs[clf]["parameters"],
+                                             cv=10,
+                                             random_state=seed)
+        optimized_model.fit(x_train, y_train)
+
+        # Save final model to file
+        if not os.path.exists(model_result_path):
+            os.makedirs(model_result_path)
+
+        with open(os.path.join(model_result_path, f"{clf}_model.pickle"), "wb") as file:
+            pickle.dump(optimized_model, file)
+
         # Get mean of feature importance scores and standard deviation over all folds
         overall_mean_importances_train = raw_importances_foldwise_mean_train / num_folds
         overall_std_importances_train = raw_importances_foldwise_std_train / num_folds
         overall_mean_importances_val = raw_importances_foldwise_mean_val / num_folds
         overall_std_importances_val = raw_importances_foldwise_std_val / num_folds
+
+        # Create XAI result folder if doesn't exist
+        if not os.path.exists(explainability_result_path):
+            os.makedirs(explainability_result_path)
 
         # Plot feature importances as determined using training and validation data
         plot_title_permutation_importance = f"Permutation importance {clf} "
