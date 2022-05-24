@@ -58,6 +58,7 @@ class TabularPreprocessor:
 
         # Set attributes
         self.data = None
+        self.label_name = None
         self.max_missing_ratio = max_missing_ratio
         self.is_fit = False
 
@@ -84,12 +85,13 @@ class TabularPreprocessor:
 
         return self.data
 
-    def fit(self, data):
+    def fit(self, data, label_column):
         """
         Fitting the standard preprocessing pipeline before transformation.
         Includes removal of instances with only missing values, removal of features with more than 20 % missing values,
         kNN-based imputation for missing values, and removal of correlated features.
         :param data: pandas.DataFrame containing the data to be preprocessed
+        :param label_column: str indicating the column name containing the label
         :return: TabularPreprocessor fitted with the given parameters
         """
 
@@ -98,6 +100,9 @@ class TabularPreprocessor:
 
         # Assign data to attribute
         self.data = data
+
+        # Assign label to attribute
+        self.label_name = label_column
 
         # Set flag indicating conducted fitting
         self.is_fit = True
@@ -112,6 +117,21 @@ class TabularPreprocessor:
 
         # Ensure pipeline instance has been fitted
         assert self.is_fit is True, ".fit() has to be called before transforming any data"
+
+        # Only keep first instance if multiple instances have the same key
+        num_instances_before = len(self.data)
+        self.data = self.data[~self.data.index.duplicated(keep="first")]
+        num_instances_diff = num_instances_before - len(self.data)
+        if num_instances_diff > 0:
+            print(f"[Warning] {num_instances_diff} instance(s) removed due to duplicate keys"
+                  f"- only keeping first occurrence!")
+
+        # Remove instances with missing label
+        num_label_nans = self.data[self.label_name].isnull().sum()
+        self.data.dropna(subset=[self.label_name], inplace=True)
+
+        if num_label_nans > 0:
+            print(f"[Warning] {num_label_nans} sample(s) removed due to missing label!")
 
         # Removal of instances with only missing values
         self.data = self.data.dropna(how="all", axis="rows")
@@ -132,17 +152,18 @@ class TabularPreprocessor:
 
         return self.data
 
-    def fit_transform(self, data):
+    def fit_transform(self, data, label_name):
         """
         Standard preprocessing pipeline returning the preprocessed data.
         Includes removal of instances with only missing values, removal of features with more than 20 % missing values,
         kNN-based imputation for missing values, and removal of correlated features.
         :param data: pandas.DataFrame containing the data to be preprocessed
+        :param label_name: str indicating column name containing label
         :return: pandas.DataFrame containing the preprocessed data
         """
 
         # Fit
-        self.fit(data=data)
+        self.fit(data=data, label_column=label_name)
 
         # Transform
         data = self.transform()

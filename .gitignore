@@ -116,3 +116,6 @@ dmypy.json
 # Custom
 .DS_Store
 .vscode
+
+# Custom by cspielvogel
+unit_testing.py

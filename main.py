@@ -6,14 +6,12 @@ Created on Apr 15 21:56 2021
 
 Template for binary classifications of tabular data including preprocessing
 # TODO: Implement OO version of main function contents
-# TODO: Add output of optimal parameters (?)
 # TODO: Add one way partial dependence plots and maybe two way for top features
-# TODO: Add confusion matrix plot / table to output
 # TODO: Add analysis flow diagram to README
 # TODO: Add commandline options /w argparse
-# TODO: Add option for output path
 # TODO: Test SHAP for multiclass prediction
-# TODO: Add UMAP to EDA (color by label)
+# TODO: Silence pandas profiling and SHAP commandline output
+# TODO: Add pandas profiling before any preprocessing
 # TODO: Update content below
 
 Content:
@@ -35,14 +33,13 @@ Input data format specifications:
 @author: cspielvogel
 """
 
-import sys
 import os
 import pickle
+import json
 
 import numpy as np
 import pandas as pd
 import seaborn
-
 import matplotlib.pyplot as plt
 
 from sklearn.model_selection import train_test_split, RandomizedSearchCV
@@ -53,13 +50,11 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import accuracy_score, confusion_matrix
 from sklearn.feature_selection import f_classif
 from sklearn.inspection import permutation_importance
-
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
-
-from pandas_profiling import ProfileReport
 import shap
 
+from exploratory_data_analysis import run_eda
 import metrics
 from preprocessing import TabularPreprocessor, TabularIntraFoldPreprocessor
 from feature_selection import univariate_feature_selection, mrmr_feature_selection
@@ -74,33 +69,32 @@ def main():
     features_to_remove = []
     verbose = True
     classifiers_to_run = ["dt", "knn", "rf", "nn"]
-    explainability_result_path = "Results/XAI/"
-    model_result_path = "Results/Models/"
-    performance_save_path = "Results/Performance/"
+    output_path = r"C:\Users\cspielvogel\PycharmProjects\TabularClassificationTemplate"
+    eda_result_path = os.path.join(output_path, r"Results/EDA/")
+    explainability_result_path = os.path.join(output_path, r"Results/XAI/")
+    model_result_path = os.path.join(output_path, r"Results/Models/")
+    performance_result_path = os.path.join(output_path, r"Results/Performance/")
 
     # Specify data location
     # data_path = "/home/cspielvogel/ImageAssociationAnalysisKeggPathwayGroups/Data/Dedicaid/fdb_multiomics_w_labels_bonferroni_significant_publication_OS36.csv"
     # data_path = "/home/cspielvogel/DataStorage/Bone_scintigraphy/Data/umap_feats_pg.csv"
     data_path = r"C:\Users\cspielvogel\PycharmProjects\TabularClassificationTemplate\Data\test_data.csv"
 
+    # Create save directories if they do not exist yet
+    for path in [eda_result_path, explainability_result_path, model_result_path, performance_result_path]:
+        if not os.path.exists(path):
+            os.makedirs(path)
+
     # Load data to table
     df = pd.read_csv(data_path, sep=";", index_col=0)
 
-    # Remove features to be removed
+    # Remove features to be removed as specified
     for col in features_to_remove:
         df = df.drop(col, axis="columns")
 
-    # Only keep first instance if multiple instances have the same key
-    num_instances_before = len(df)
-    df = df[~df.index.duplicated(keep="first")]
-    num_instances_diff = num_instances_before - len(df)
-    if num_instances_diff > 0:
-        print("Warning: {} instances removed due to duplicate keys - only keeping first occurrence!"
-              .format(num_instances_diff))
-
-    # Perform standardized preprocessing    # TODO: remove any columns with missing label, otherwise preproc fails!
+    # Perform standardized preprocessing
     preprocessor = TabularPreprocessor()
-    df = preprocessor.fit_transform(df)
+    df = preprocessor.fit_transform(df, label_name=label_name)
 
     # Separate data into training and test
     y = df[label_name]
@@ -108,29 +102,17 @@ def main():
     x = df.drop(label_name, axis="columns")
     feature_names = x.columns
 
-    # Preprocess data for creation of final model
-
-    # Perform standardization and feature imputation
-    intra_fold_preprocessor = TabularIntraFoldPreprocessor(k="automated", normalization="standardize")
-    x_preprocessed = intra_fold_preprocessor.fit_transform(x)
-
-    # Perform feature selection
-    selected_indices_preprocessed, x_preprocessed, _ = mrmr_feature_selection(x_preprocessed.values,
-                                                                                           y.values,
-                                                                                           # score_func=f_classif,
-                                                                                           num_features="log2n")
-
-    # Get number of classes
-    num_classes = len(np.unique(y))
-
-    # Create and save EDA via Pandas Profiling
-    profile = ProfileReport(df, title="Pandas Profiling Report", minimal=True)
-    os.makedirs("Results/EDA/", exist_ok=True)
-    profile.to_file("Results/EDA/exploratory_data_analysis.html")
+    # Perform EDA and save results
+    run_eda(features=x,
+            labels=y,
+            label_column=label_name,
+            save_path=eda_result_path,
+            verbose=verbose)
 
     # Setup classifiers
-    knn = KNeighborsClassifier(weights="distance")
-    knn_param_grid = {"n_neighbors": [int(val) for val in np.round(np.sqrt(x.shape[1])) + np.arange(5) + 1] +
+    knn = KNeighborsClassifier()
+    knn_param_grid = {"weights": ["distance"],
+                      "n_neighbors": [int(val) for val in np.round(np.sqrt(x.shape[1])) + np.arange(5) + 1] +
                                      [int(val) for val in np.round(np.sqrt(x.shape[1])) - np.arange(5) if val >= 1],
                       "p": np.arange(1, 5)}
     knn_param_grid = {}
@@ -141,27 +123,23 @@ def main():
                      "min_samples_split": [2, 4, 6],
                      "min_samples_leaf": [1, 3, 5, 6],
                      "max_features": ["auto", "sqrt", "log2"]}
-    dt_param_grid = {}  # TODO: reactivate parameter grids
+    # dt_param_grid = {}  # TODO: reactivate parameter grids
 
-    rf = RandomForestClassifier(n_estimators=100,
-                                criterion="entropy",
-                                max_depth=5,
-                                min_samples_split=5,
-                                min_samples_leaf=2)
-    rf_param_grid = {"n_estimators": [100, 500],
+    rf = RandomForestClassifier()
+    rf_param_grid = {"criterion": "entropy",
+                     "n_estimators": 500,
                      "max_depth": np.arange(1, 20),
                      "min_samples_split": [2, 4, 6],
                      "min_samples_leaf": [1, 3, 5, 6],
                      "max_features": ["auto", "sqrt", "log2"]}
     rf_param_grid = {}
 
-    nn = MLPClassifier(hidden_layer_sizes=(32, 64, 32),
-                       activation="relu",
-                       early_stopping=True,
-                       n_iter_no_change=20,
-                       max_iter=1000)
-
-    nn_param_grid = {"activation": ["relu", "tanh", "logistic"],
+    nn = MLPClassifier()
+    nn_param_grid = {"hidden_layer_sizes": [(32, 64, 32)],
+                     "early_stopping": True,
+                     "n_iter_no_change": 20,
+                     "max_iter": 1000,
+                     "activation": ["relu", "tanh", "logistic"],
                      "solver": ["adam"],
                      "learning_rate_init": [0.01, 0.001, 0.0001]}
     nn_param_grid = {}
@@ -181,8 +159,11 @@ def main():
 
     clfs_performance = {"acc": [], "sns": [], "spc": [], "auc": []}
 
+    # Get number of classes
+    num_classes = len(np.unique(y))
+
     # Initialize result table
-    results = pd.DataFrame(index=classifiers_to_run)    # index=list(clfs.keys()))
+    results = pd.DataFrame(index=classifiers_to_run)
 
     # Iterate over classifiers
     for clf in clfs:
@@ -190,7 +171,7 @@ def main():
             continue
 
         if verbose is True:
-            print(f"Starting training for {clf}..")
+            print(f"[Model training] Starting training for {clf} classifier")
 
         # Initialize cumulated confusion matrix and fold-wise performance containers
         cms = np.zeros((num_classes, num_classes))
@@ -239,19 +220,19 @@ def main():
             optimized_model.fit(x_train, y_train)
 
             # Compute and display fold-wise performance
-            y_pred = optimized_model.predict(x_test)
+            y_pred = optimized_model.best_estimator_.predict(x_test)
             # if len(np.unique(y_train)) > 2:
             #     y_pred = optimized_model.predict(x_test)
             # else:
             #     y_pred = optimized_model.predict_proba(x_test)
 
             # Compute permutation feature importance scores on training and validation data
-            raw_importances_train = permutation_importance(optimized_model, x_test, y_test,
+            raw_importances_train = permutation_importance(optimized_model.best_estimator_, x_test, y_test,
                                                            n_repeats=30,
                                                            scoring="roc_auc_ovr",
                                                            n_jobs=10,  # TODO: adjust and automate
                                                            random_state=fold_index)
-            raw_importances_val = permutation_importance(optimized_model, x_train, y_train,
+            raw_importances_val = permutation_importance(optimized_model.best_estimator_, x_train, y_train,
                                                          n_repeats=30,
                                                          scoring="roc_auc_ovr",
                                                          n_jobs=10,  # TODO: adjust and automate
@@ -270,9 +251,6 @@ def main():
             raw_importances_foldwise_std_train += raw_importances_train.importances_std
             raw_importances_foldwise_mean_val += raw_importances_val.importances_mean
             raw_importances_foldwise_std_val += raw_importances_val.importances_std
-
-            # # Predict test data using trained model   # TODO: check if this works for multi class classif
-            # y_pred = optimized_model.predict(x_test)
 
             # Compute performance
             cm = confusion_matrix(y_test, y_pred)
@@ -293,6 +271,15 @@ def main():
         model = clfs[clf]["classifier"]
         model.random_state = seed
 
+        # Preprocess data for creation of final model
+        intra_fold_preprocessor = TabularIntraFoldPreprocessor(k="automated", normalization="standardize")
+        x_preprocessed = intra_fold_preprocessor.fit_transform(x)
+
+        selected_indices_preprocessed, x_preprocessed, _ = mrmr_feature_selection(x_preprocessed.values,
+                                                                                  y.values,
+                                                                                  # score_func=f_classif,
+                                                                                  num_features="log2n")
+
         # Hyperparameter tuning for final model
         optimized_model = RandomizedSearchCV(model,
                                              param_distributions=clfs[clf]["parameters"],
@@ -301,18 +288,24 @@ def main():
         optimized_model.fit(x_preprocessed, y)
 
         # Save final model to file
-        if not os.path.exists(model_result_path):
-            os.makedirs(model_result_path)
-
         with open(os.path.join(model_result_path, f"{clf}_model.pickle"), "wb") as file:
-            pickle.dump(optimized_model, file)
+            pickle.dump(optimized_model.best_estimator_, file)
+
+        # # Save hyperparameters of final model to file
+        # TODO: fix TypeError: Object of type int32 is not JSON serializable
+        # with open(os.path.join(model_result_path, f"{clf}_hyperparameters.json"), "w") as file:
+        #     json.dump(optimized_model.best_params_, file, indent=4)
 
         # SHAP analysis
+        if verbose is True:
+            print("[XAI] Computing SHAP importances")
+
         explainer = shap.KernelExplainer(optimized_model.best_estimator_.predict, x_preprocessed)
         shap_values = explainer.shap_values(x_preprocessed)
+
         shap.summary_plot(shap_values=shap_values,
                           features=x_preprocessed,
-                          plot_type="dot",
+                          # plot_type="dot",
                           feature_names=feature_names,
                           show=False)
         plt.subplots_adjust(bottom=0.15)
@@ -325,10 +318,6 @@ def main():
         overall_std_importances_train = raw_importances_foldwise_std_train / num_folds
         overall_mean_importances_val = raw_importances_foldwise_mean_val / num_folds
         overall_std_importances_val = raw_importances_foldwise_std_val / num_folds
-
-        # Create XAI result folder if doesn't exist
-        if not os.path.exists(explainability_result_path):
-            os.makedirs(explainability_result_path)
 
         # Plot feature importances as determined using training and validation data
         plot_title_permutation_importance = f"Permutation importance {clf} "
@@ -363,27 +352,33 @@ def main():
             print(f"Finished {clf} with MCCV-wide confusion matrix:")
             print(cms)
 
-        # Display confusion matrix  # TODO: evaluate
+        # Display and save confusion matrix figure
         seaborn.heatmap(cms, annot=True, cmap="Blues", fmt="g")
         plt.xlabel("Predicted")
         plt.ylabel("Actual")
         plt.title("{} - Confusion matrix".format(clf))
-        plt.savefig(os.path.join(performance_save_path, f"confusion_matrix-{clf}.png"))
+        plt.savefig(os.path.join(performance_result_path, f"confusion_matrix-{clf}.png"))
         plt.close()
+
+        # Save confusion matrix as CSV
+        label_names = np.sort(np.unique(y))
+        cm_df = pd.DataFrame(cms,
+                             columns=[str(name) + " (actual)" for name in label_names],
+                             index=[str(name) + " (predicted)" for name in label_names])
+        cm_df.to_csv(os.path.join(performance_result_path, f"confusion_matrix-{clf}.csv"), sep=";")
 
     # Append performance to result table
     for metric in clfs_performance:
         results[metric] = clfs_performance[metric]
 
     # Save result table
-    if not os.path.exists(performance_save_path):
-        os.makedirs(performance_save_path)
-
     colors = ["dimgray", "gray", "darkgray", "maroon", "lightgray", "gainsboro"]
-    results.to_csv(os.path.join(performance_save_path, "performances.csv"), sep=";")
+    results.to_csv(os.path.join(performance_result_path, "performances.csv"), sep=";")
     results.plot.bar(rot=45, color=colors).legend(loc="upper right")
 
-    print(results)
+    if verbose is True:
+        print("[Results] Displaying performance")
+        print(results)
 
     # Adjust legend position so it doesn't mask any bars
     handles = [plt.Rectangle((0, 0), 1, 1, color=color) for color in colors]
@@ -393,7 +388,7 @@ def main():
     plt.yticks(np.arange(0, 1.1, 0.1))
     plt.grid(linestyle="dashed", axis="y")
     plt.title("Overall performance")
-    plt.savefig(os.path.join(performance_save_path, "performance.png".format(clf)))
+    plt.savefig(os.path.join(performance_result_path, "performance.png".format(clf)))
     plt.close()
 
 
