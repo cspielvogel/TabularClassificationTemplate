@@ -239,10 +239,11 @@ def main():
             optimized_model.fit(x_train, y_train)
 
             # Compute and display fold-wise performance
-            if len(np.unique(y_train)) > 2:
-                y_pred = optimized_model.predict(x_test)
-            else:
-                y_pred = optimized_model.predict_proba(x_test)
+            y_pred = optimized_model.predict(x_test)
+            # if len(np.unique(y_train)) > 2:
+            #     y_pred = optimized_model.predict(x_test)
+            # else:
+            #     y_pred = optimized_model.predict_proba(x_test)
 
             # Compute permutation feature importance scores on training and validation data
             raw_importances_train = permutation_importance(optimized_model, x_test, y_test,
