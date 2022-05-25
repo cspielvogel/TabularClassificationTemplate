@@ -50,6 +50,7 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import accuracy_score, confusion_matrix
 from sklearn.feature_selection import f_classif
 from sklearn.inspection import permutation_importance
+from sklearn.inspection import PartialDependenceDisplay
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
 import shap
@@ -63,22 +64,24 @@ from explainability_tools import plot_importances
 
 def main():
     # Set hyperparameters
-    num_folds = 5
+    num_folds = 1
     # label_name = "DPD_final"
     label_name = "1"
     features_to_remove = []
     verbose = True
-    classifiers_to_run = ["dt", "knn", "rf", "nn"]
-    output_path = r"C:\Users\cspielvogel\PycharmProjects\TabularClassificationTemplate"
+    # classifiers_to_run = ["dt", "knn", "rf", "nn"]
+    classifiers_to_run = ["dt"]
+    # output_path = r"C:\Users\cspielvogel\PycharmProjects\TabularClassificationTemplate"
+    output_path = r"/home/cspielvogel/Tools/Supervised_ML/TabularClassificationTemplate"
     eda_result_path = os.path.join(output_path, r"Results/EDA/")
     explainability_result_path = os.path.join(output_path, r"Results/XAI/")
     model_result_path = os.path.join(output_path, r"Results/Models/")
     performance_result_path = os.path.join(output_path, r"Results/Performance/")
 
     # Specify data location
-    # data_path = "/home/cspielvogel/ImageAssociationAnalysisKeggPathwayGroups/Data/Dedicaid/fdb_multiomics_w_labels_bonferroni_significant_publication_OS36.csv"
     # data_path = "/home/cspielvogel/DataStorage/Bone_scintigraphy/Data/umap_feats_pg.csv"
     data_path = r"C:\Users\cspielvogel\PycharmProjects\TabularClassificationTemplate\Data\test_data.csv"
+    data_path = r"/home/cspielvogel/Tools/Supervised_ML/TabularClassificationTemplate/Data/test_data.csv"
 
     # Create save directories if they do not exist yet
     for path in [eda_result_path, explainability_result_path, model_result_path, performance_result_path]:
@@ -102,12 +105,12 @@ def main():
     x = df.drop(label_name, axis="columns")
     feature_names = x.columns
 
-    # Perform EDA and save results
-    run_eda(features=x,
-            labels=y,
-            label_column=label_name,
-            save_path=eda_result_path,
-            verbose=verbose)
+    # # Perform EDA and save results
+    # run_eda(features=x,
+    #         labels=y,
+    #         label_column=label_name,
+    #         save_path=eda_result_path,
+    #         verbose=verbose)
 
     # Setup classifiers
     knn = KNeighborsClassifier()
@@ -296,6 +299,34 @@ def main():
         # with open(os.path.join(model_result_path, f"{clf}_hyperparameters.json"), "w") as file:
         #     json.dump(optimized_model.best_params_, file, indent=4)
 
+        # Partial dependenced plots (DPD)
+        print(optimized_model.classes_)
+        for feature_index, _ in enumerate(np.arange(x_preprocessed.shape[1])):
+            if num_classes > 2:
+                for target_index in np.arange(num_classes):
+                    PartialDependenceDisplay.from_estimator(optimized_model.best_estimator_,
+                                                            X=x_preprocessed,
+                                                            features=[feature_index],
+                                                            feature_names=feature_names,
+                                                            target=np.unique(y)[target_index])
+                    plt.subplots_adjust(bottom=0.15)
+                    plt.savefig(os.path.join(explainability_result_path,
+            f"partial_dependence-{clf}_feature-{feature_names[feature_index]}_class-{np.unique(y)[target_index]}.png"),
+                                bbox_inches="tight")
+                    plt.close()
+            else:
+                print(feature_index)
+                print(feature_names)
+                PartialDependenceDisplay.from_estimator(optimized_model.best_estimator_,
+                                                        X=x_preprocessed,
+                                                        features=[feature_index],
+                                                        feature_names=feature_names)
+                plt.subplots_adjust(bottom=0.15)
+                plt.savefig(os.path.join(explainability_result_path,
+                                         f"partial_dependence-{clf}_feature-{feature_names[feature_index]}.png"),
+                            bbox_inches="tight")
+                plt.close()
+
         # SHAP analysis
         if verbose is True:
             print("[XAI] Computing SHAP importances")
@@ -312,6 +343,14 @@ def main():
         plt.savefig(os.path.join(explainability_result_path, f"shap_summary-{clf}.png"),
                     bbox_inches="tight")
         plt.close()
+
+        # print("----")
+        # for feat_name in feature_names:
+        #     shap.dependence_plot(feat_name, shap_values, features=x_preprocessed, feature_names=feature_names)
+        #     plt.subplots_adjust(bottom=0.15)
+        #     plt.savefig(os.path.join(explainability_result_path, f"shap_dependence-{clf}-{feat_name}.png"),
+        #                 bbox_inches="tight")
+        #     plt.close()
 
         # Get mean of feature importance scores and standard deviation over all folds
         overall_mean_importances_train = raw_importances_foldwise_mean_train / num_folds
