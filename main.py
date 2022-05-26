@@ -12,6 +12,8 @@ Template for binary classifications of tabular data including preprocessing
 # TODO: Test SHAP for multiclass prediction
 # TODO: Silence pandas profiling and SHAP commandline output
 # TODO: Add pandas profiling before any preprocessing
+# TODO: ensure that variable names used in savefig() don't contain special characters which can't be used in file name
+# TODO: Add surrogate models
 # TODO: Update content below
 
 Content:
@@ -49,8 +51,7 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import accuracy_score, confusion_matrix
 from sklearn.feature_selection import f_classif
-from sklearn.inspection import permutation_importance
-from sklearn.inspection import PartialDependenceDisplay
+from sklearn.inspection import permutation_importance, PartialDependenceDisplay
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
 import shap
@@ -66,25 +67,29 @@ def main():
     # Set hyperparameters
     num_folds = 1
     # label_name = "DPD_final"
-    label_name = "1"
+    # label_name = "1"
+    label_name = "OS_histo36"
     features_to_remove = []
     verbose = True
     # classifiers_to_run = ["dt", "knn", "rf", "nn"]
     classifiers_to_run = ["dt"]
     # output_path = r"C:\Users\cspielvogel\PycharmProjects\TabularClassificationTemplate"
-    output_path = r"/home/cspielvogel/Tools/Supervised_ML/TabularClassificationTemplate"
+    output_path = r"C:\Users\cspielvogel\PycharmProjects\HNSCC"
     eda_result_path = os.path.join(output_path, r"Results/EDA/")
     explainability_result_path = os.path.join(output_path, r"Results/XAI/")
     model_result_path = os.path.join(output_path, r"Results/Models/")
     performance_result_path = os.path.join(output_path, r"Results/Performance/")
+    intermediate_data_path = os.path.join(output_path, r"Results/Intermediate_Data")
 
     # Specify data location
+    # data_path = "/home/cspielvogel/ImageAssociationAnalysisKeggPathwayGroups/Data/Dedicaid/fdb_multiomics_w_labels_bonferroni_significant_publication_OS36.csv"
     # data_path = "/home/cspielvogel/DataStorage/Bone_scintigraphy/Data/umap_feats_pg.csv"
-    data_path = r"C:\Users\cspielvogel\PycharmProjects\TabularClassificationTemplate\Data\test_data.csv"
-    data_path = r"/home/cspielvogel/Tools/Supervised_ML/TabularClassificationTemplate/Data/test_data.csv"
+    # data_path = r"C:\Users\cspielvogel\PycharmProjects\TabularClassificationTemplate\Data\test_data.csv"
+    data_path = r"C:\Users\cspielvogel\Downloads\fdb_multiomics_w_labels_all.csv"
 
     # Create save directories if they do not exist yet
-    for path in [eda_result_path, explainability_result_path, model_result_path, performance_result_path]:
+    for path in [eda_result_path, explainability_result_path, model_result_path, performance_result_path,
+                 intermediate_data_path]:
         if not os.path.exists(path):
             os.makedirs(path)
 
@@ -129,8 +134,8 @@ def main():
     # dt_param_grid = {}  # TODO: reactivate parameter grids
 
     rf = RandomForestClassifier()
-    rf_param_grid = {"criterion": "entropy",
-                     "n_estimators": 500,
+    rf_param_grid = {"criterion": ["entropy"],
+                     "n_estimators": [500],
                      "max_depth": np.arange(1, 20),
                      "min_samples_split": [2, 4, 6],
                      "min_samples_leaf": [1, 3, 5, 6],
@@ -139,9 +144,9 @@ def main():
 
     nn = MLPClassifier()
     nn_param_grid = {"hidden_layer_sizes": [(32, 64, 32)],
-                     "early_stopping": True,
-                     "n_iter_no_change": 20,
-                     "max_iter": 1000,
+                     "early_stopping": [True],
+                     "n_iter_no_change": [20],
+                     "max_iter": [1000],
                      "activation": ["relu", "tanh", "logistic"],
                      "solver": ["adam"],
                      "learning_rate_init": [0.01, 0.001, 0.0001]}
@@ -278,6 +283,20 @@ def main():
         intra_fold_preprocessor = TabularIntraFoldPreprocessor(k="automated", normalization="standardize")
         x_preprocessed = intra_fold_preprocessor.fit_transform(x)
 
+        # Save preprocessed data
+        x_preprocessed_df = pd.DataFrame(data=x_preprocessed,
+                                         index=x.index,
+                                         columns=feature_names)
+        x_preprocessed_df.to_csv(os.path.join(output_path,
+                                              os.path.join(intermediate_data_path, "preprocessed_features.csv")),
+                                 sep=";")
+
+        y_df = pd.DataFrame(data=y, columns=[label_name])
+        y_df.to_csv(os.path.join(output_path,
+                                 os.path.join(intermediate_data_path, "preprocessed_labels.csv")),
+                    sep=";")
+
+        # Feature selection for final model
         selected_indices_preprocessed, x_preprocessed, _ = mrmr_feature_selection(x_preprocessed.values,
                                                                                   y.values,
                                                                                   # score_func=f_classif,
@@ -294,13 +313,18 @@ def main():
         with open(os.path.join(model_result_path, f"{clf}_model.pickle"), "wb") as file:
             pickle.dump(optimized_model.best_estimator_, file)
 
-        # # Save hyperparameters of final model to file
-        # TODO: fix TypeError: Object of type int32 is not JSON serializable
-        # with open(os.path.join(model_result_path, f"{clf}_hyperparameters.json"), "w") as file:
-        #     json.dump(optimized_model.best_params_, file, indent=4)
+        # Save hyperparameters of final model to file
+        with open(os.path.join(model_result_path, f"{clf}_optimized_hyperparameters.json"), "w") as file:
+            param_dict_json_conform = {}     # Necessary since JSON doesn't take some data types such as int32
+            for key in optimized_model.best_params_:
+                try:
+                    param_dict_json_conform[key] = int(optimized_model.best_params_[key])
+                except ValueError:
+                    param_dict_json_conform[key] = optimized_model.best_params_[key]
+
+            json.dump(param_dict_json_conform, file, indent=4)
 
         # Partial dependenced plots (DPD)
-        print(optimized_model.classes_)
         for feature_index, _ in enumerate(np.arange(x_preprocessed.shape[1])):
             if num_classes > 2:
                 for target_index in np.arange(num_classes):
@@ -315,8 +339,6 @@ def main():
                                 bbox_inches="tight")
                     plt.close()
             else:
-                print(feature_index)
-                print(feature_names)
                 PartialDependenceDisplay.from_estimator(optimized_model.best_estimator_,
                                                         X=x_preprocessed,
                                                         features=[feature_index],
@@ -343,14 +365,6 @@ def main():
         plt.savefig(os.path.join(explainability_result_path, f"shap_summary-{clf}.png"),
                     bbox_inches="tight")
         plt.close()
-
-        # print("----")
-        # for feat_name in feature_names:
-        #     shap.dependence_plot(feat_name, shap_values, features=x_preprocessed, feature_names=feature_names)
-        #     plt.subplots_adjust(bottom=0.15)
-        #     plt.savefig(os.path.join(explainability_result_path, f"shap_dependence-{clf}-{feat_name}.png"),
-        #                 bbox_inches="tight")
-        #     plt.close()
 
         # Get mean of feature importance scores and standard deviation over all folds
         overall_mean_importances_train = raw_importances_foldwise_mean_train / num_folds

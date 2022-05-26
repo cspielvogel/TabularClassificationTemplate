@@ -11,6 +11,7 @@ Content:
         - Removing all-NA instances
         - Remove constant features
         - Removing features with too many missing values (default > 20% NaNs)
+        - TODO: convert categorical to one-hot encoded features (see commented out code)
         - TODO: removal of correlated features (foldwise)
         - TODO: remove samples that have all NA except for label (dropna with thres? for percent missing?)
         - TODO: remove samples that have no label
@@ -149,6 +150,30 @@ class TabularPreprocessor:
                 if np.all(np.array([i for i in self.data[column] if not i in ['nan', np.nan]]) ==
                           self.data[column].values[0]):
                     self.data = self.data.drop(column, axis="columns")
+
+        # # From https://github.com/slundberg/shap/issues/451
+        # # We have to transform categorical variables to use sklearn models
+        # from sklearn.preprocessing import OneHotEncoder
+        #
+        # categorical_mask = X.dtypes == object
+        # # Filter categoricals
+        # categorical_cols = features[categorical_mask].tolist()
+        #
+        # ohe = OneHotEncoder(handle_unknown='ignore', sparse=False)
+        #
+        # # Transform
+        # ohe.fit(df[categorical_cols])
+        # # Save encoding for future downstream task.
+        # cat_ohe = ohe.transform(df[categorical_cols])
+        # dump(ohe,. / data / models / adult_encoder.joblib
+        # ")
+        # encoding_path = './data/models/adult_encoder.pkl'
+        # with open(encoding_path, "wb") as f:
+        #     pickle.dump(ohe, f)
+        #
+        # ohe_df = pd.DataFrame(cat_ohe, columns=ohe.get_feature_names(input_features=categorical_cols))
+        # # concat with original data and drop original columns and create combined frame
+        # _X = pd.concat([X, ohe_df], axis=1).drop(columns=categorical_cols, axis=1)
 
         return self.data
 
