@@ -54,8 +54,7 @@ def mrmr_feature_selection(x_train, y_train, x_test=None, num_features="log2n"):
                                      show_progress=False)
 
     index_selected = [x_train.columns.tolist().index(feat_name) for feat_name in selected_features]
-
-    x_train_selected = x_train[index_selected].values
+    x_train_selected = x_train[selected_features].values
 
     if x_test is not None:
         x_test = x_test[index_selected].values

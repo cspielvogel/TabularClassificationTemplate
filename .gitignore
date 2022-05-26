@@ -118,4 +118,5 @@ dmypy.json
 .vscode
 
 # Custom by cspielvogel
-unit_testing.py
+testing.py
+testing.ipynb

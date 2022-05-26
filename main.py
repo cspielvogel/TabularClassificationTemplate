@@ -55,6 +55,7 @@ from sklearn.inspection import permutation_importance, PartialDependenceDisplay
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
 import shap
+from interpret.glassbox import ExplainableBoostingClassifier
 
 from exploratory_data_analysis import run_eda
 import metrics
@@ -65,14 +66,14 @@ from explainability_tools import plot_importances
 
 def main():
     # Set hyperparameters
-    num_folds = 1
+    num_folds = 20
     # label_name = "DPD_final"
     # label_name = "1"
     label_name = "OS_histo36"
     features_to_remove = []
     verbose = True
-    # classifiers_to_run = ["dt", "knn", "rf", "nn"]
-    classifiers_to_run = ["dt"]
+    classifiers_to_run = ["ebm", "dt", "knn", "rf", "nn"]
+    # classifiers_to_run = ["dt", "ebm"]
     # output_path = r"C:\Users\cspielvogel\PycharmProjects\TabularClassificationTemplate"
     output_path = r"C:\Users\cspielvogel\PycharmProjects\HNSCC"
     eda_result_path = os.path.join(output_path, r"Results/EDA/")
@@ -110,14 +111,18 @@ def main():
     x = df.drop(label_name, axis="columns")
     feature_names = x.columns
 
-    # # Perform EDA and save results
-    # run_eda(features=x,
-    #         labels=y,
-    #         label_column=label_name,
-    #         save_path=eda_result_path,
-    #         verbose=verbose)
+    # Perform EDA and save results
+    run_eda(features=x,
+            labels=y,
+            label_column=label_name,
+            save_path=eda_result_path,
+            verbose=verbose)
 
     # Setup classifiers
+    ebm = ExplainableBoostingClassifier()
+    ebm_param_grid = {}     # TODO: Add parameter grid (https://interpret.ml/docs/ebm.html)
+    ebm_param_grid = {}
+
     knn = KNeighborsClassifier()
     knn_param_grid = {"weights": ["distance"],
                       "n_neighbors": [int(val) for val in np.round(np.sqrt(x.shape[1])) + np.arange(5) + 1] +
@@ -131,7 +136,7 @@ def main():
                      "min_samples_split": [2, 4, 6],
                      "min_samples_leaf": [1, 3, 5, 6],
                      "max_features": ["auto", "sqrt", "log2"]}
-    # dt_param_grid = {}  # TODO: reactivate parameter grids
+    dt_param_grid = {}  # TODO: reactivate parameter grids
 
     rf = RandomForestClassifier()
     rf_param_grid = {"criterion": ["entropy"],
@@ -152,7 +157,10 @@ def main():
                      "learning_rate_init": [0.01, 0.001, 0.0001]}
     nn_param_grid = {}
 
-    clfs = {"knn":
+    clfs = {"ebm":
+                {"classifier": ebm,
+                "parameters": ebm_param_grid},
+            "knn":
                 {"classifier": knn,
                  "parameters": knn_param_grid},
             "dt":
@@ -207,14 +215,15 @@ def main():
                                                                        x_test.values,
                                                                        # score_func=f_classif,
                                                                        num_features="log2n")
+            feature_names_selected = feature_names[selected_indices]
 
-            # # Random undersampling    # TODO: evaluate for performance improvement and reactivate
-            # rus = RandomUnderSampler(random_state=fold_index, sampling_strategy=0.3)
+            # Random undersampling    # TODO: evaluate for performance improvement and reactivate
+            # rus = RandomUnderSampler(random_state=fold_index, sampling_strategy=0.4)
             # x_train, y_train = rus.fit_resample(x_train, y_train)
-            #
-            # # SMOTE
-            # smote = SMOTE(random_state=fold_index, sampling_strategy=1)
-            # x_train, y_train = smote.fit_resample(x_train, y_train)
+
+            # SMOTE
+            smote = SMOTE(random_state=fold_index, sampling_strategy=1)
+            x_train, y_train = smote.fit_resample(x_train, y_train)
 
             # Setup model
             model = clfs[clf]["classifier"]
@@ -229,10 +238,6 @@ def main():
 
             # Compute and display fold-wise performance
             y_pred = optimized_model.best_estimator_.predict(x_test)
-            # if len(np.unique(y_train)) > 2:
-            #     y_pred = optimized_model.predict(x_test)
-            # else:
-            #     y_pred = optimized_model.predict_proba(x_test)
 
             # Compute permutation feature importance scores on training and validation data
             raw_importances_train = permutation_importance(optimized_model.best_estimator_, x_test, y_test,
@@ -248,11 +253,10 @@ def main():
 
             # Initialize fold-wise feature importance containers for mean and standard deviation with zero values
             if "raw_importances_foldwise_mean_train" not in locals():
-                feature_names = feature_names[selected_indices]
-                raw_importances_foldwise_mean_train = np.zeros((len(feature_names),))
-                raw_importances_foldwise_std_train = np.zeros((len(feature_names),))
-                raw_importances_foldwise_mean_val = np.zeros((len(feature_names),))
-                raw_importances_foldwise_std_val = np.zeros((len(feature_names),))
+                raw_importances_foldwise_mean_train = np.zeros((len(feature_names_selected),))
+                raw_importances_foldwise_std_train = np.zeros((len(feature_names_selected),))
+                raw_importances_foldwise_mean_val = np.zeros((len(feature_names_selected),))
+                raw_importances_foldwise_std_val = np.zeros((len(feature_names_selected),))
 
             # Add importance scores to overall container
             raw_importances_foldwise_mean_train += raw_importances_train.importances_mean
@@ -297,10 +301,12 @@ def main():
                     sep=";")
 
         # Feature selection for final model
-        selected_indices_preprocessed, x_preprocessed, _ = mrmr_feature_selection(x_preprocessed.values,
-                                                                                  y.values,
+        selected_indices_preprocessed, x_preprocessed, _ = mrmr_feature_selection(x_preprocessed,
+                                                                                  y,
                                                                                   # score_func=f_classif,
                                                                                   num_features="log2n")
+
+        feature_names_selected = feature_names[selected_indices_preprocessed]
 
         # Hyperparameter tuning for final model
         optimized_model = RandomizedSearchCV(model,
@@ -308,6 +314,12 @@ def main():
                                              cv=10,
                                              random_state=seed)
         optimized_model.fit(x_preprocessed, y)
+
+        # Add feature names enabling interpretability of output plots (only needed for some algorithms like ebm)
+        try:
+            model.set_params(**{"feature_names": feature_names_selected})
+        except ValueError:
+            pass
 
         # Save final model to file
         with open(os.path.join(model_result_path, f"{clf}_model.pickle"), "wb") as file:
@@ -325,27 +337,27 @@ def main():
             json.dump(param_dict_json_conform, file, indent=4)
 
         # Partial dependenced plots (DPD)
-        for feature_index, _ in enumerate(np.arange(x_preprocessed.shape[1])):
+        for feature_index, _ in enumerate(np.arange(len(feature_names_selected))):
             if num_classes > 2:
                 for target_index in np.arange(num_classes):
                     PartialDependenceDisplay.from_estimator(optimized_model.best_estimator_,
                                                             X=x_preprocessed,
                                                             features=[feature_index],
-                                                            feature_names=feature_names,
+                                                            feature_names=feature_names_selected,
                                                             target=np.unique(y)[target_index])
                     plt.subplots_adjust(bottom=0.15)
                     plt.savefig(os.path.join(explainability_result_path,
-            f"partial_dependence-{clf}_feature-{feature_names[feature_index]}_class-{np.unique(y)[target_index]}.png"),
+            f"partial_dependence-{clf}_feature-{feature_names_selected[feature_index]}_class-{np.unique(y)[target_index]}.png"),
                                 bbox_inches="tight")
                     plt.close()
             else:
                 PartialDependenceDisplay.from_estimator(optimized_model.best_estimator_,
                                                         X=x_preprocessed,
                                                         features=[feature_index],
-                                                        feature_names=feature_names)
+                                                        feature_names=feature_names_selected)
                 plt.subplots_adjust(bottom=0.15)
                 plt.savefig(os.path.join(explainability_result_path,
-                                         f"partial_dependence-{clf}_feature-{feature_names[feature_index]}.png"),
+                                         f"partial_dependence-{clf}_feature-{feature_names_selected[feature_index]}.png"),
                             bbox_inches="tight")
                 plt.close()
 
@@ -359,7 +371,7 @@ def main():
         shap.summary_plot(shap_values=shap_values,
                           features=x_preprocessed,
                           # plot_type="dot",
-                          feature_names=feature_names,
+                          feature_names=feature_names_selected,
                           show=False)
         plt.subplots_adjust(bottom=0.15)
         plt.savefig(os.path.join(explainability_result_path, f"shap_summary-{clf}.png"),
@@ -376,7 +388,7 @@ def main():
         plot_title_permutation_importance = f"Permutation importance {clf} "
         plot_importances(importances_mean=overall_mean_importances_train,
                          importances_std=overall_std_importances_train,
-                         feature_names=feature_names,
+                         feature_names=feature_names_selected,
                          plot_title=plot_title_permutation_importance + " - Training data",
                          order_alphanumeric=True,
                          include_top=0,
@@ -387,7 +399,7 @@ def main():
 
         plot_importances(importances_mean=overall_mean_importances_val,
                          importances_std=overall_std_importances_val,
-                         feature_names=feature_names,
+                         feature_names=feature_names_selected,
                          plot_title=plot_title_permutation_importance + " - Validation data",
                          order_alphanumeric=True,
                          include_top=0,

@@ -83,8 +83,8 @@ def run_pca(features, labels, label_column, save_path):
 def run_eda(features, labels, label_column, save_path, analyses_to_run=("pandas_profiling", "umap", "tsne", "pca"),
             verbose=True):
     if "pandas_profiling" in analyses_to_run:
-        data = features
-        data[label_column] = labels
+        data = features.copy()
+        data[label_column] = labels.copy()
 
         run_pandas_profiling(data=data,
                              save_path=save_path,
