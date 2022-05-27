@@ -66,14 +66,14 @@ from explainability_tools import plot_importances
 
 def main():
     # Set hyperparameters
-    num_folds = 20
+    num_folds = 2
     # label_name = "DPD_final"
     # label_name = "1"
     label_name = "OS_histo36"
     features_to_remove = []
     verbose = True
     classifiers_to_run = ["ebm", "dt", "knn", "rf", "nn"]
-    # classifiers_to_run = ["dt", "ebm"]
+    # classifiers_to_run = ["ebm"]
     # output_path = r"C:\Users\cspielvogel\PycharmProjects\TabularClassificationTemplate"
     output_path = r"C:\Users\cspielvogel\PycharmProjects\HNSCC"
     eda_result_path = os.path.join(output_path, r"Results/EDA/")
@@ -222,8 +222,11 @@ def main():
             # x_train, y_train = rus.fit_resample(x_train, y_train)
 
             # SMOTE
-            smote = SMOTE(random_state=fold_index, sampling_strategy=1)
-            x_train, y_train = smote.fit_resample(x_train, y_train)
+            if num_classes == 2:
+                smote = SMOTE(random_state=fold_index, sampling_strategy=1)
+                x_train, y_train = smote.fit_resample(x_train, y_train)
+            else:
+                pass    # TODO: enable multi class smote (dict)
 
             # Setup model
             model = clfs[clf]["classifier"]
@@ -365,13 +368,19 @@ def main():
         if verbose is True:
             print("[XAI] Computing SHAP importances")
 
-        explainer = shap.KernelExplainer(optimized_model.best_estimator_.predict, x_preprocessed)
+        # Ensure plotting summary as bar for multiclass and beeswarm for binary classification
+        if num_classes > 2:
+            predictor = optimized_model.best_estimator_.predict_proba
+        else:
+            predictor = optimized_model.best_estimator_.predict
+
+        explainer = shap.KernelExplainer(predictor, x_preprocessed)
         shap_values = explainer.shap_values(x_preprocessed)
 
         shap.summary_plot(shap_values=shap_values,
                           features=x_preprocessed,
-                          # plot_type="dot",
                           feature_names=feature_names_selected,
+                          class_names=optimized_model.best_estimator_.classes_,
                           show=False)
         plt.subplots_adjust(bottom=0.15)
         plt.savefig(os.path.join(explainability_result_path, f"shap_summary-{clf}.png"),
