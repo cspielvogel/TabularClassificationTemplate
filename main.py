@@ -14,6 +14,7 @@ Template for binary classifications of tabular data including preprocessing
 # TODO: Add pandas profiling before any preprocessing
 # TODO: ensure that variable names used in savefig() don't contain special characters which can't be used in file name
 # TODO: Add surrogate models
+# TODO: Save raw data tables for XAI to results: SHAP values, permutation importances
 # TODO: Update content below
 
 Content:

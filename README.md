@@ -12,30 +12,39 @@ simple integration into larger machine learning workflows.
 
 Content:
 
-- Preprocessing pipeline
+- Exploratory data analysis via Pandas Profiling
+- Preprocessing
     - Removing all-NA instances
     - Removing features with constant value over all instances (ignoring NaNs)
     - Removing features with too many missing values
-    - Removing correlated features
-- Fold-wise preprocessing pipeline
-    - Normalization (standardization per default)
+- Fold-wise preprocessing
+    - Normalization
     - Filling missing values using kNN imputation
-    - Resampling for handling label imbalances
+    - Resampling for handling label imbalances via SMOTE
 - Performance estimation using Monte Carlo cross validation with multiple metrics
     - Accuracy
     - AUC
     - Sensitivity / Recall
     - Specificity
-- Feature selection
-- Hyperparameter optimization
+- Feature selection using mRMR
+- Hyperparameter optimization (Using random grid search)
 - Training and evaluation of multiple classification algorithms
-    - k-nearest neighbors
-    - Decision tree
-    - Random forest
-    - Neural network
+    - Explainable Boosting Machine
+    - k-nearest Neighbors
+    - Decision Tree
+    - Random Forest
+    - Neural Network
 - Explainable Artificial Intelligence (XAI)
-    - Permutations feature importance
+    - Permutation feature importance
     - Partial dependence plots
+    - SHAP summary plot
 - Visualization of performance evaluation
-    - Barplot with performances for the classification models
+    - Performances for each classification model via barplot
+    - Confusion matrices
 
+Outputs:
+    - EDA: results as HTML report
+    - Intermediate data: preprocessed data for final models as CSV
+    - Models: pickled objects and tuned hyperparameters as JSON
+    - Performance: Confusion matrices and overall performance metrics for each model as CSV and visalization
+    - XAI: Partial dependence plots, permutation feature importances and SHAP summary plots
