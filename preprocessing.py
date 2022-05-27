@@ -127,12 +127,12 @@ class TabularPreprocessor:
             print(f"[Warning] {num_instances_diff} instance(s) removed due to duplicate keys"
                   f"- only keeping first occurrence!")
 
-        # Remove instances with missing label
-        num_label_nans = self.data[self.label_name].isnull().sum()
-        self.data.dropna(subset=[self.label_name], inplace=True)
-
-        if num_label_nans > 0:
-            print(f"[Warning] {num_label_nans} sample(s) removed due to missing label!")
+        # # Remove instances with missing label
+        # num_label_nans = self.data[self.label_name].isnull().sum()
+        # self.data.dropna(subset=[self.label_name], inplace=True)
+        #
+        # if num_label_nans > 0:
+        #     print(f"[Warning] {num_label_nans} sample(s) removed due to missing label!")
 
         # Removal of instances with only missing values
         self.data = self.data.dropna(how="all", axis="rows")

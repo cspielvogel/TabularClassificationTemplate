@@ -13,19 +13,9 @@ Template for binary classifications of tabular data including preprocessing
 # TODO: Silence pandas profiling and SHAP commandline output
 # TODO: Add pandas profiling before any preprocessing
 # TODO: ensure that variable names used in savefig() don't contain special characters which can't be used in file name
-# TODO: Add surrogate models
+# TODO: Add surrogate models (maybe in a second line analysis script)
+# TODO: Add LCE? https://towardsdatascience.com/random-forest-or-xgboost-it-is-time-to-explore-lce-2fed913eafb8
 # TODO: Save raw data tables for XAI to results: SHAP values, permutation importances
-# TODO: Update content below
-
-Content:
-    - Feature selection
-    - Training and evaluation of multiple classification algorithms
-        - k-nearest neighbors
-        - Decision tree
-        - Random forest
-        - Neural network
-    - Visualization of performance evaluation
-        - Barplot with performances for the classification models
 
 Input data format specifications:
     - As of now, a file path has to be supplied to the main function as string value for the variable "data_path";
@@ -62,12 +52,12 @@ from exploratory_data_analysis import run_eda
 import metrics
 from preprocessing import TabularPreprocessor, TabularIntraFoldPreprocessor
 from feature_selection import univariate_feature_selection, mrmr_feature_selection
-from explainability_tools import plot_importances
+from explainability_tools import plot_importances, plot_shap_features, plot_partial_dependences
 
 
 def main():
     # Set hyperparameters
-    num_folds = 2
+    num_folds = 20
     # label_name = "DPD_final"
     # label_name = "1"
     label_name = "OS_histo36"
@@ -225,9 +215,9 @@ def main():
             # SMOTE
             if num_classes == 2:
                 smote = SMOTE(random_state=fold_index, sampling_strategy=1)
-                x_train, y_train = smote.fit_resample(x_train, y_train)
             else:
-                pass    # TODO: enable multi class smote (dict)
+                smote = SMOTE(random_state=fold_index, sampling_strategy="not majority")
+            x_train, y_train = smote.fit_resample(x_train, y_train)
 
             # Setup model
             model = clfs[clf]["classifier"]
@@ -341,52 +331,24 @@ def main():
             json.dump(param_dict_json_conform, file, indent=4)
 
         # Partial dependenced plots (DPD)
-        for feature_index, _ in enumerate(np.arange(len(feature_names_selected))):
-            if num_classes > 2:
-                for target_index in np.arange(num_classes):
-                    PartialDependenceDisplay.from_estimator(optimized_model.best_estimator_,
-                                                            X=x_preprocessed,
-                                                            features=[feature_index],
-                                                            feature_names=feature_names_selected,
-                                                            target=np.unique(y)[target_index])
-                    plt.subplots_adjust(bottom=0.15)
-                    plt.savefig(os.path.join(explainability_result_path,
-            f"partial_dependence-{clf}_feature-{feature_names_selected[feature_index]}_class-{np.unique(y)[target_index]}.png"),
-                                bbox_inches="tight")
-                    plt.close()
-            else:
-                PartialDependenceDisplay.from_estimator(optimized_model.best_estimator_,
-                                                        X=x_preprocessed,
-                                                        features=[feature_index],
-                                                        feature_names=feature_names_selected)
-                plt.subplots_adjust(bottom=0.15)
-                plt.savefig(os.path.join(explainability_result_path,
-                                         f"partial_dependence-{clf}_feature-{feature_names_selected[feature_index]}.png"),
-                            bbox_inches="tight")
-                plt.close()
+        # TODO: put into explainability_tools.py function
+        plot_partial_dependences(optimized_model=optimized_model,
+                                 x_preprocessed=x_preprocessed,
+                                 y=y,
+                                 feature_names=feature_names_selected,
+                                 num_classes=num_classes,
+                                 clf_name=clf,
+                                 save_path=explainability_result_path)
 
-        # SHAP analysis
-        if verbose is True:
-            print("[XAI] Computing SHAP importances")
-
-        # Ensure plotting summary as bar for multiclass and beeswarm for binary classification
-        if num_classes > 2:
-            predictor = optimized_model.best_estimator_.predict_proba
-        else:
-            predictor = optimized_model.best_estimator_.predict
-
-        explainer = shap.KernelExplainer(predictor, x_preprocessed)
-        shap_values = explainer.shap_values(x_preprocessed)
-
-        shap.summary_plot(shap_values=shap_values,
-                          features=x_preprocessed,
-                          feature_names=feature_names_selected,
-                          class_names=optimized_model.best_estimator_.classes_,
-                          show=False)
-        plt.subplots_adjust(bottom=0.15)
-        plt.savefig(os.path.join(explainability_result_path, f"shap_summary-{clf}.png"),
-                    bbox_inches="tight")
-        plt.close()
+        # SHAP analysis and plotting
+        plot_shap_features(optimized_model=optimized_model,
+                           x_preprocessed=x_preprocessed,
+                           num_classes=num_classes,
+                           feature_names=feature_names_selected,
+                           index_names=x_preprocessed_df.index,
+                           clf_name=clf,
+                           save_path=explainability_result_path,
+                           verbose=True)
 
         # Get mean of feature importance scores and standard deviation over all folds
         overall_mean_importances_train = raw_importances_foldwise_mean_train / num_folds
@@ -404,8 +366,7 @@ def main():
                          include_top=0,
                          display_plots=False,
                          save_path=os.path.join(explainability_result_path,
-                                                plot_title_permutation_importance + "-train")
-                         )
+                                                plot_title_permutation_importance + "-train"))
 
         plot_importances(importances_mean=overall_mean_importances_val,
                          importances_std=overall_std_importances_val,
@@ -415,8 +376,7 @@ def main():
                          include_top=0,
                          display_plots=False,
                          save_path=os.path.join(explainability_result_path,
-                                                plot_title_permutation_importance + "-test")
-                         )
+                                                plot_title_permutation_importance + "-test"))
 
         # Calculate overall performance
         for metric in performance_foldwise:

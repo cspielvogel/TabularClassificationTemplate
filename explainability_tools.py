@@ -16,8 +16,9 @@ TODO:
 
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.inspection import permutation_importance
+from sklearn.inspection import permutation_importance, PartialDependenceDisplay
 from sklearn.metrics import roc_auc_score
+import shap
 
 from matplotlib import pyplot as plt
 import seaborn as sns
@@ -25,6 +26,72 @@ import pandas as pd
 import numpy as np
 
 import os
+
+
+def plot_partial_dependences(optimized_model, x_preprocessed, y, feature_names, num_classes, clf_name, save_path):
+    """
+    TODO: docstring
+    """
+    for feature_index, _ in enumerate(np.arange(len(feature_names))):
+        if num_classes > 2:
+            for target_index in np.arange(num_classes):
+                PartialDependenceDisplay.from_estimator(optimized_model.best_estimator_,
+                                                        X=x_preprocessed,
+                                                        features=[feature_index],
+                                                        feature_names=feature_names,
+                                                        target=np.unique(y)[target_index])
+                plt.subplots_adjust(bottom=0.15)
+                plt.savefig(os.path.join(save_path,
+                                         f"partial_dependence-{clf_name}_feature-{feature_names[feature_index]}_class-{np.unique(y)[target_index]}.png"),
+                            bbox_inches="tight")
+                plt.close()
+        else:
+            PartialDependenceDisplay.from_estimator(optimized_model.best_estimator_,
+                                                    X=x_preprocessed,
+                                                    features=[feature_index],
+                                                    feature_names=feature_names)
+            plt.subplots_adjust(bottom=0.15)
+            plt.savefig(os.path.join(save_path,
+                                     f"partial_dependence-{clf_name}_feature-{feature_names[feature_index]}.png"),
+                        bbox_inches="tight")
+            plt.close()
+
+
+def plot_shap_features(optimized_model, x_preprocessed, num_classes, feature_names, index_names, clf_name, save_path,
+                       verbose=True):
+    """
+    TODO: docstring
+    """
+    # SHAP analysis
+    if verbose is True:
+        print("[XAI] Computing SHAP importances")
+
+    # Ensure plotting summary as bar for multiclass and beeswarm for binary classification
+    if num_classes > 2:
+        predictor = optimized_model.best_estimator_.predict_proba
+    else:
+        predictor = optimized_model.best_estimator_.predict
+
+    # Compute SHAP values
+    explainer = shap.KernelExplainer(predictor, x_preprocessed)
+    shap_values = explainer.shap_values(x_preprocessed)
+
+    # Save SHAP values to file
+    shap_df = pd.DataFrame(shap_values,
+                           columns=feature_names,
+                           index=index_names)
+
+    shap_df.to_csv(os.path.join(save_path, "shap.csv"), sep=";")
+
+    shap.summary_plot(shap_values=shap_values,
+                      features=x_preprocessed,
+                      feature_names=feature_names,
+                      class_names=optimized_model.best_estimator_.classes_,
+                      show=False)
+    plt.subplots_adjust(bottom=0.15)
+    plt.savefig(os.path.join(save_path, f"shap_summary-{clf_name}.png"),
+                bbox_inches="tight")
+    plt.close()
 
 
 def plot_importances(importances_mean, importances_std, feature_names, plot_title, order_alphanumeric=True,
@@ -39,7 +106,7 @@ def plot_importances(importances_mean, importances_std, feature_names, plot_titl
     :param bool order_alphanumeric: Indicating whether to sort features alphanumerically in barplot; Keeps order if False
     :param int include_top: Number of features to include in the plot ordered by highest importance; All if 0
     :param bool display_plots: If True, show plots on creation time
-    :param str save_path: Indicate path to save plots to; If None, plots are not saved
+    :param str save_path: Indicate path to save plots and result files to; If None, no files are saved
     :return: pandas.DataFrame with formatted mean and standard deviation for feature importances
     """
 
@@ -95,6 +162,10 @@ def plot_importances(importances_mean, importances_std, feature_names, plot_titl
     if display_plots is True:
         # Display plot
         plt.show()
+
+    # Save importances to file
+    if save_path is True:
+        importance_df.to_csv(save_path, sep=";")
 
     return importance_df
 
