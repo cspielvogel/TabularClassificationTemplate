@@ -9,13 +9,10 @@ Template for binary classifications of tabular data including preprocessing
 # TODO: Add one way partial dependence plots and maybe two way for top features
 # TODO: Add analysis flow diagram to README
 # TODO: Add commandline options /w argparse
-# TODO: Test SHAP for multiclass prediction
-# TODO: Silence pandas profiling and SHAP commandline output
-# TODO: Add pandas profiling before any preprocessing
 # TODO: ensure that variable names used in savefig() don't contain special characters which can't be used in file name
 # TODO: Add surrogate models (maybe in a second line analysis script)
 # TODO: Add LCE? https://towardsdatascience.com/random-forest-or-xgboost-it-is-time-to-explore-lce-2fed913eafb8
-# TODO: Save raw data tables for XAI to results: SHAP values, permutation importances
+# TODO: Add XGBoost?
 
 Input data format specifications:
     - As of now, a file path has to be supplied to the main function as string value for the variable "data_path";
@@ -34,6 +31,7 @@ import numpy as np
 import pandas as pd
 import seaborn
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 from sklearn.model_selection import train_test_split, RandomizedSearchCV
 from sklearn.ensemble import RandomForestClassifier
@@ -57,14 +55,13 @@ from explainability_tools import plot_importances, plot_shap_features, plot_part
 
 def main():
     # Set hyperparameters
-    num_folds = 20
+    num_folds = 5
     # label_name = "DPD_final"
     # label_name = "1"
     label_name = "OS_histo36"
-    features_to_remove = []
     verbose = True
     classifiers_to_run = ["ebm", "dt", "knn", "rf", "nn"]
-    # classifiers_to_run = ["ebm"]
+    # classifiers_to_run = ["ebm", "dt"]
     # output_path = r"C:\Users\cspielvogel\PycharmProjects\TabularClassificationTemplate"
     output_path = r"C:\Users\cspielvogel\PycharmProjects\HNSCC"
     eda_result_path = os.path.join(output_path, r"Results/EDA/")
@@ -88,9 +85,12 @@ def main():
     # Load data to table
     df = pd.read_csv(data_path, sep=";", index_col=0)
 
-    # Remove features to be removed as specified
-    for col in features_to_remove:
-        df = df.drop(col, axis="columns")
+    # Perform EDA and save results
+    run_eda(features=df.drop(label_name, axis="columns"),
+            labels=df[label_name],
+            label_column=label_name,
+            save_path=eda_result_path,
+            verbose=verbose)
 
     # Perform standardized preprocessing
     preprocessor = TabularPreprocessor()
@@ -102,16 +102,34 @@ def main():
     x = df.drop(label_name, axis="columns")
     feature_names = x.columns
 
-    # Perform EDA and save results
-    run_eda(features=x,
-            labels=y,
-            label_column=label_name,
-            save_path=eda_result_path,
-            verbose=verbose)
-
     # Setup classifiers
     ebm = ExplainableBoostingClassifier()
-    ebm_param_grid = {}     # TODO: Add parameter grid (https://interpret.ml/docs/ebm.html)
+    # ebm_param_grid = {"max_bins": [128, 256, 512],
+    #                   "max_interaction_bins": [16, 32, 64],
+    #                   "binning": ["uniform", "quantile"],
+    #                   "interactions": [10, 15, 20],
+    #                   "outer_bags": [4, 8, 16],
+    #                   "inner_bags": [0, 2, 8],
+    #                   "learning_rate": [0.001, 0.01, 0.1],
+    #                   "early_stopping_rounds": [40, 50, 60],
+    #                   "early_stopping_tolerance": [0.0001],
+    #                   "max_rounds": [7500],
+    #                   "min_samples_leaf": [2, 3, 4],
+    #                   "max_leaves": [2, 3, 4, 5],
+    #                   "n_jobs": [10]}
+    ebm_param_grid = {"max_bins": [256],
+                      "max_interaction_bins": [64],
+                      "binning": ["quantile"],
+                      "interactions": [15],
+                      "outer_bags": [16],
+                      "inner_bags": [8],
+                      "learning_rate": [0.001, 0.01, 0.1],
+                      "early_stopping_rounds": [50],
+                      "early_stopping_tolerance": [0.0001],
+                      "max_rounds": [7500],
+                      "min_samples_leaf": [4],
+                      "max_leaves": [3],
+                      "n_jobs": [10]}
     ebm_param_grid = {}
 
     knn = KNeighborsClassifier()
@@ -173,9 +191,12 @@ def main():
     results = pd.DataFrame(index=classifiers_to_run)
 
     # Iterate over classifiers
+    clf_index = -1
     for clf in clfs:
         if clf not in classifiers_to_run:
             continue
+
+        clf_index += 1  # Update index for classifiers which are actually run
 
         if verbose is True:
             print(f"[Model training] Starting training for {clf} classifier")
@@ -185,7 +206,13 @@ def main():
         performance_foldwise = {"acc": [], "sns": [], "spc": [], "auc": []}
 
         # Iterate over MCCV
-        for fold_index in np.arange(num_folds):
+        tqdm_bar = tqdm(np.arange(num_folds))
+        for fold_index in tqdm_bar:
+
+            # Progressbar
+            if verbose is True:
+                tqdm_bar.set_description(str(f"[Model training] Processing classifier {clf_index+1} /"
+                                             f" {len(classifiers_to_run)} ({clf}) | Fold {fold_index+1} / {num_folds}"))
 
             # Split into training and test data
             x_train, x_test, y_train, y_test = train_test_split(x, y,
@@ -207,10 +234,6 @@ def main():
                                                                        # score_func=f_classif,
                                                                        num_features="log2n")
             feature_names_selected = feature_names[selected_indices]
-
-            # Random undersampling    # TODO: evaluate for performance improvement and reactivate
-            # rus = RandomUnderSampler(random_state=fold_index, sampling_strategy=0.4)
-            # x_train, y_train = rus.fit_resample(x_train, y_train)
 
             # SMOTE
             if num_classes == 2:
@@ -331,18 +354,16 @@ def main():
             json.dump(param_dict_json_conform, file, indent=4)
 
         # Partial dependenced plots (DPD)
-        # TODO: put into explainability_tools.py function
-        plot_partial_dependences(optimized_model=optimized_model,
-                                 x_preprocessed=x_preprocessed,
+        plot_partial_dependences(model=optimized_model,
+                                 x=x_preprocessed,
                                  y=y,
                                  feature_names=feature_names_selected,
-                                 num_classes=num_classes,
                                  clf_name=clf,
                                  save_path=explainability_result_path)
 
         # SHAP analysis and plotting
-        plot_shap_features(optimized_model=optimized_model,
-                           x_preprocessed=x_preprocessed,
+        plot_shap_features(model=optimized_model,
+                           x=x_preprocessed,
                            num_classes=num_classes,
                            feature_names=feature_names_selected,
                            index_names=x_preprocessed_df.index,
@@ -384,7 +405,8 @@ def main():
             clfs_performance[metric].append(avg_metric)
 
         if verbose is True:
-            print(f"Finished {clf} with MCCV-wide confusion matrix:")
+            print(str(f"[Model validation] Finished {clf} with MCCV-wide AUC [{clfs_performance['auc'][clf_index]}] and"
+                      f" confusion matrix:"))
             print(cms)
 
         # Display and save confusion matrix figure

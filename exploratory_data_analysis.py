@@ -10,7 +10,7 @@ Includes:
     - Pandas profiling
     - UMAP
 
-# TODO: add docstrings
+# TODO: add UMAP parameters
 # TODO: add tSNE and PCA
 
 @author: cspielvogel
@@ -30,6 +30,14 @@ from preprocessing import TabularIntraFoldPreprocessor
 
 
 def run_pandas_profiling(data, save_path, verbose=True):
+    """
+    Perform exploratory data analysis using pandas profiling and save corresponding report as HTML file
+
+    :param data: pandas.DataFrame containing the data for EDA
+    :param save_path: str indicating the directory where the EDA report shall be saved
+    :param verbose: bool indicating whether commandline output shall be shown
+    :return: None
+    """
     if verbose is True:
         print("[EDA] Starting Pandas Profiling")
 
@@ -38,6 +46,15 @@ def run_pandas_profiling(data, save_path, verbose=True):
 
 
 def run_umap(features, labels, label_column, save_path):
+    """
+    Perform uniform manifold approximation and projection for dimensionality reduction to two dimensions and plot
+
+    :param features: numpy.ndarray containing the feature values
+    :param labels: numpy.ndarray 1D or a list containing the label values
+    :param label_column: str indicating the name of the label column (used for plotting)
+    :param save_path: str indicating the directory path where the result plot will be saved
+    :return: numpy.ndarray containing the embedded features
+    """
 
     # Reduce to 2 dimensions using UMAP
     reducer = UMAP()    # TODO: Set parameters
@@ -71,17 +88,37 @@ def run_umap(features, labels, label_column, save_path):
     # Save plot to HTML file
     scatter1.write_html(os.path.join(save_path, "umap.html"))
 
+    return data_reduced
+
 
 def run_tsne(features, labels, label_column, save_path):
+    """
+
+    """
     pass
 
 
 def run_pca(features, labels, label_column, save_path):
+    """
+
+    """
     pass
 
 
 def run_eda(features, labels, label_column, save_path, analyses_to_run=("pandas_profiling", "umap", "tsne", "pca"),
             verbose=True):
+    """
+    Perform exploratory data analysis
+
+    :param features: numpy.ndarray containing the feature values
+    :param labels: numpy.ndarray 1D or a list containing the label values
+    :param label_column: str indicating the name of the label column (used for plotting)
+    :param save_path: str indicating the directory path where the result plot will be saved
+    :param analyses_to_run: tuple containing strings indicating the techniques to be executed
+    :param verbose: bool indicating whether to display commandline output
+    :return: None
+    """
+
     if "pandas_profiling" in analyses_to_run:
         data = features.copy()
         data[label_column] = labels.copy()

@@ -11,16 +11,13 @@ Content:
         - Removing all-NA instances
         - Remove constant features
         - Removing features with too many missing values (default > 20% NaNs)
-        - TODO: convert categorical to one-hot encoded features (see commented out code)
+        - TODO: convert categorical to one-hot encoded features (see commented out code); only normalize numeric cols
         - TODO: removal of correlated features (foldwise)
         - TODO: remove samples that have all NA except for label (dropna with thres? for percent missing?)
-        - TODO: remove samples that have no label
-        - TODO: automatically detect categorical features and convert those to one-hot while normalizing numeric features
 
     - Fold-wise preprocessing pipeline
         - Normalization (standardization per default)
         - Filling missing values using kNN imputation
-        - TODO:Resampling e.g. SMOTE
         - Normalize only numeric features and one-hot encode categorical features
 
 @author: cspielvogel
@@ -127,12 +124,12 @@ class TabularPreprocessor:
             print(f"[Warning] {num_instances_diff} instance(s) removed due to duplicate keys"
                   f"- only keeping first occurrence!")
 
-        # # Remove instances with missing label
-        # num_label_nans = self.data[self.label_name].isnull().sum()
-        # self.data.dropna(subset=[self.label_name], inplace=True)
-        #
-        # if num_label_nans > 0:
-        #     print(f"[Warning] {num_label_nans} sample(s) removed due to missing label!")
+        # Remove instances with missing label
+        num_label_nans = self.data[self.label_name].isnull().sum()
+        self.data.dropna(subset=[self.label_name], inplace=True)
+
+        if num_label_nans > 0:
+            print(f"[Warning] {num_label_nans} sample(s) removed due to missing label!")
 
         # Removal of instances with only missing values
         self.data = self.data.dropna(how="all", axis="rows")

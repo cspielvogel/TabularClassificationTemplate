@@ -5,16 +5,12 @@
 Created on Apr 22 10:40 2021
 Functionalities for feature selection
 Included methods:
-    - ANOVA
-    - chi squared
-
-TODO
-    - Adapt to fit / transform format to enable inference
+    - mRMR
+    - Filter feature selection (e.g. ANOVA, chi squared)
 
 @author: clemens
 """
 
-import warnings
 from math import log2
 import numpy as np
 import pandas as pd
@@ -79,8 +75,8 @@ def univariate_feature_selection(x_train, y_train, x_test=None, score_func=f_cla
     """
 
     # Display interpretability warning
-    warnings.warn(
-        "Filter-based selection requires previous removal of redundant features to ensure interpretability. If you have not done so, perform a removal of redundant features or perform mRMR feature selection.")
+    print(
+        "[Warning] Filter-based selection requires previous removal of redundant features to ensure interpretability. If you have not done so, perform a removal of redundant features or perform mRMR feature selection.")
 
     # Specify number of features to select
     if num_features == "log2n":
@@ -101,6 +97,10 @@ def univariate_feature_selection(x_train, y_train, x_test=None, score_func=f_cla
     index_selected = np.array(sorted(selector.scores_.argsort()[-num_features:]))
 
     return index_selected, x_train_selected, x_test_selected
+
+
+def main():
+    pass
 
 
 if __name__ == "__main__":

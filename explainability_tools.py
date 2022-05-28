@@ -5,11 +5,14 @@
 Created on May 06 13:09 2022
 
 Functionality associated to explainability
+
 Includes:
+    - Partial dependence plots (DPD)
     - Permutation feature importance (for train and test data)
+    - SHAP value computation and summary plotting
+
 TODO:
-    - Partial dependence plots
-    - SHAP (summary plot, force plot, heatmap, others?)
+    - Additional SHAP plots (e.g. heatmap)
 
 @author: cspielvogel
 """
@@ -28,15 +31,32 @@ import numpy as np
 import os
 
 
-def plot_partial_dependences(optimized_model, x_preprocessed, y, feature_names, num_classes, clf_name, save_path):
+def plot_partial_dependences(model, x, y, feature_names, clf_name, save_path):
     """
-    TODO: docstring
+    Create and plot partial dependence plots (PDP)
+
+    :param model: sklearn.base.BaseEstimator or derivative containing a trained model
+    :param x: numpy.ndarray containing the feature values
+    :param y: numpy.ndarray 1D or a list containing the label values
+    :param feature_names: numpy.ndarray 1D or a list containing the feature names as strings
+    :param clf_name: str indicating the classifiers name
+    :param save_path: str indicating the directory path where the outputs shall be saved
+    :return: None
     """
+
+    # Get number of classes
+    num_classes = len(np.unique(y))
+
+    # Iterate through features and create PDP for each
     for feature_index, _ in enumerate(np.arange(len(feature_names))):
+
+        # Multi class
         if num_classes > 2:
+
+            # Create PDP for each target class
             for target_index in np.arange(num_classes):
-                PartialDependenceDisplay.from_estimator(optimized_model.best_estimator_,
-                                                        X=x_preprocessed,
+                PartialDependenceDisplay.from_estimator(model.best_estimator_,
+                                                        X=x,
                                                         features=[feature_index],
                                                         feature_names=feature_names,
                                                         target=np.unique(y)[target_index])
@@ -45,9 +65,11 @@ def plot_partial_dependences(optimized_model, x_preprocessed, y, feature_names, 
                                          f"partial_dependence-{clf_name}_feature-{feature_names[feature_index]}_class-{np.unique(y)[target_index]}.png"),
                             bbox_inches="tight")
                 plt.close()
+
+        # Single class
         else:
-            PartialDependenceDisplay.from_estimator(optimized_model.best_estimator_,
-                                                    X=x_preprocessed,
+            PartialDependenceDisplay.from_estimator(model.best_estimator_,
+                                                    X=x,
                                                     features=[feature_index],
                                                     feature_names=feature_names)
             plt.subplots_adjust(bottom=0.15)
@@ -57,24 +79,34 @@ def plot_partial_dependences(optimized_model, x_preprocessed, y, feature_names, 
             plt.close()
 
 
-def plot_shap_features(optimized_model, x_preprocessed, num_classes, feature_names, index_names, clf_name, save_path,
-                       verbose=True):
+def plot_shap_features(model, x, num_classes, feature_names, index_names, clf_name, save_path, verbose=True):
     """
-    TODO: docstring
+    Compute SHAP values, save to file and create summary plots
+
+    :param model: sklearn.base.BaseEstimator or derivative containing a trained model
+    :param x: numpy.ndarray containing the feature values
+    :param num_classes: int indicating the number of classes used to train the model
+    :param feature_names: numpy.ndarray 1D or a list containing the feature names as strings
+    :param index_names: numpy.ndarray 1D or a list containing the sample names
+    :param clf_name: str indicating the classifiers name
+    :param save_path: str indicating the directory path where the outputs shall be saved
+    :param verbose: bool indicating whether commandline output shall be displayed
+    :return: pandas.DataFrame containing the SHAP values
     """
+
     # SHAP analysis
     if verbose is True:
         print("[XAI] Computing SHAP importances")
 
     # Ensure plotting summary as bar for multiclass and beeswarm for binary classification
     if num_classes > 2:
-        predictor = optimized_model.best_estimator_.predict_proba
+        predictor = model.best_estimator_.predict_proba
     else:
-        predictor = optimized_model.best_estimator_.predict
+        predictor = model.best_estimator_.predict
 
     # Compute SHAP values
-    explainer = shap.KernelExplainer(predictor, x_preprocessed)
-    shap_values = explainer.shap_values(x_preprocessed)
+    explainer = shap.KernelExplainer(predictor, x)
+    shap_values = explainer.shap_values(x)
 
     # Save SHAP values to file
     shap_df = pd.DataFrame(shap_values,
@@ -84,14 +116,16 @@ def plot_shap_features(optimized_model, x_preprocessed, num_classes, feature_nam
     shap_df.to_csv(os.path.join(save_path, "shap.csv"), sep=";")
 
     shap.summary_plot(shap_values=shap_values,
-                      features=x_preprocessed,
+                      features=x,
                       feature_names=feature_names,
-                      class_names=optimized_model.best_estimator_.classes_,
+                      class_names=model.best_estimator_.classes_,
                       show=False)
     plt.subplots_adjust(bottom=0.15)
     plt.savefig(os.path.join(save_path, f"shap_summary-{clf_name}.png"),
                 bbox_inches="tight")
     plt.close()
+
+    return shap_df
 
 
 def plot_importances(importances_mean, importances_std, feature_names, plot_title, order_alphanumeric=True,
@@ -171,83 +205,7 @@ def plot_importances(importances_mean, importances_std, feature_names, plot_titl
 
 
 def main():
-    """
-    DEMO
-    """
-
-    from sklearn.datasets import load_breast_cancer
-
-    # Set hyperparameters
-    num_folds = 10
-    plot_title = "10-fold MCCV mean feature importance"
-    data = load_breast_cancer()
-    # data = load_iris()
-    feature_names = data.feature_names
-
-    # Initialize fold-wise feature importance containers for mean and standard deviation with zero values
-    raw_importances_foldwise_mean_train = np.zeros((len(feature_names),))
-    raw_importances_foldwise_std_train = np.zeros((len(feature_names),))
-    raw_importances_foldwise_mean_val = np.zeros((len(feature_names),))
-    raw_importances_foldwise_std_val = np.zeros((len(feature_names),))
-
-    # Perform Monate Carlo cross-validation
-    for i in range(num_folds):
-        x_train, x_val, y_train, y_val = train_test_split(
-            data.data, data.target, random_state=i)
-
-        model = RandomForestClassifier(random_state=i).fit(x_train, y_train)
-
-        # Compute and display fold-wise performance
-        if len(np.unique(y_train)) > 2:
-            y_pred = model.predict_proba(x_val)
-        else:
-            y_pred = model.predict(x_val)
-
-        model_performance = roc_auc_score(y_val, y_pred, multi_class="ovr")
-        print(f"Fold {i+1} AUC: {model_performance:.2}")
-
-        # Compute permutation feature importance scores on training and validation data
-        raw_importances_train = permutation_importance(model, x_val, y_val,
-                                                       n_repeats=30,
-                                                       scoring="roc_auc_ovr",
-                                                       n_jobs=10,   # TODO: adjust and automate
-                                                       random_state=i)
-        raw_importances_val = permutation_importance(model, x_train, y_train,
-                                                     n_repeats=30,
-                                                     scoring="roc_auc_ovr",
-                                                     n_jobs=10,   # TODO: adjust and automate
-                                                     random_state=i)
-
-        # Add importance scores to overall container
-        raw_importances_foldwise_mean_train += raw_importances_train.importances_mean
-        raw_importances_foldwise_std_train += raw_importances_train.importances_std
-        raw_importances_foldwise_mean_val += raw_importances_val.importances_mean
-        raw_importances_foldwise_std_val += raw_importances_val.importances_std
-
-    # Get mean of feature importance scores and standard deviation over all folds
-    overall_mean_importances_train = raw_importances_foldwise_mean_train / num_folds
-    overall_std_importances_train = raw_importances_foldwise_std_train / num_folds
-    overall_mean_importances_val = raw_importances_foldwise_mean_val / num_folds
-    overall_std_importances_val = raw_importances_foldwise_std_val / num_folds
-
-    # Plot feature importances as determined using training and validation data
-    plot_importances(importances_mean=overall_mean_importances_train,
-                     importances_std=overall_std_importances_train,
-                     feature_names=feature_names,
-                     plot_title=plot_title + " - Training data",
-                     order_alphanumeric=True,
-                     include_top=0,
-                     display_plots=True,
-                     save_path="tmp/")
-
-    plot_importances(importances_mean=overall_mean_importances_val,
-                     importances_std=overall_std_importances_val,
-                     feature_names=feature_names,
-                     plot_title=plot_title + " - Validation data",
-                     order_alphanumeric=True,
-                     include_top=0,
-                     display_plots=True,
-                     save_path="tmp/")
+    pass
 
 
 if __name__ == "__main__":
