@@ -33,17 +33,18 @@ import seaborn
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
-from sklearn.model_selection import train_test_split, RandomizedSearchCV
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.tree import DecisionTreeClassifier
+from sklearn.model_selection import train_test_split, RandomizedSearchCV
 from sklearn.metrics import accuracy_score, confusion_matrix
 from sklearn.feature_selection import f_classif
-from sklearn.inspection import permutation_importance, PartialDependenceDisplay
+from sklearn.inspection import permutation_importance
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
 import shap
+from xgboost import XGBClassifier
 from interpret.glassbox import ExplainableBoostingClassifier
 
 from exploratory_data_analysis import run_eda
@@ -60,9 +61,10 @@ def main():
     # label_name = "1"
     label_name = "OS_histo36"
     verbose = True
-    classifiers_to_run = ["ebm", "dt", "knn", "rf", "nn"]
-    # classifiers_to_run = ["ebm", "dt"]
-    # output_path = r"C:\Users\cspielvogel\PycharmProjects\TabularClassificationTemplate"
+    # classifiers_to_run = ["ebm", "dt", "knn", "nn", "rf", "xgb"]
+    classifiers_to_run = ["xgb"]
+
+    # Set output paths
     output_path = r"C:\Users\cspielvogel\PycharmProjects\HNSCC"
     eda_result_path = os.path.join(output_path, r"Results/EDA/")
     explainability_result_path = os.path.join(output_path, r"Results/XAI/")
@@ -71,7 +73,6 @@ def main():
     intermediate_data_path = os.path.join(output_path, r"Results/Intermediate_Data")
 
     # Specify data location
-    # data_path = "/home/cspielvogel/ImageAssociationAnalysisKeggPathwayGroups/Data/Dedicaid/fdb_multiomics_w_labels_bonferroni_significant_publication_OS36.csv"
     # data_path = "/home/cspielvogel/DataStorage/Bone_scintigraphy/Data/umap_feats_pg.csv"
     # data_path = r"C:\Users\cspielvogel\PycharmProjects\TabularClassificationTemplate\Data\test_data.csv"
     data_path = r"C:\Users\cspielvogel\Downloads\fdb_multiomics_w_labels_all.csv"
@@ -130,7 +131,7 @@ def main():
                       "min_samples_leaf": [4],
                       "max_leaves": [3],
                       "n_jobs": [10]}
-    ebm_param_grid = {}
+    ebm_param_grid = {}     # TODO: reactivate parameter grids
 
     knn = KNeighborsClassifier()
     knn_param_grid = {"weights": ["distance"],
@@ -145,16 +146,7 @@ def main():
                      "min_samples_split": [2, 4, 6],
                      "min_samples_leaf": [1, 3, 5, 6],
                      "max_features": ["auto", "sqrt", "log2"]}
-    dt_param_grid = {}  # TODO: reactivate parameter grids
-
-    rf = RandomForestClassifier()
-    rf_param_grid = {"criterion": ["entropy"],
-                     "n_estimators": [500],
-                     "max_depth": np.arange(1, 20),
-                     "min_samples_split": [2, 4, 6],
-                     "min_samples_leaf": [1, 3, 5, 6],
-                     "max_features": ["auto", "sqrt", "log2"]}
-    rf_param_grid = {}
+    dt_param_grid = {}
 
     nn = MLPClassifier()
     nn_param_grid = {"hidden_layer_sizes": [(32, 64, 32)],
@@ -166,21 +158,37 @@ def main():
                      "learning_rate_init": [0.01, 0.001, 0.0001]}
     nn_param_grid = {}
 
+    rf = RandomForestClassifier()
+    rf_param_grid = {"criterion": ["entropy"],
+                     "n_estimators": [500],
+                     "max_depth": np.arange(1, 20),
+                     "min_samples_split": [2, 4, 6],
+                     "min_samples_leaf": [1, 3, 5, 6],
+                     "max_features": ["auto", "sqrt", "log2"]}
+    rf_param_grid = {}
+
+    xgb = XGBClassifier()
+    xgb_param_grid = {}     # TODO: add parameter grid
+    xgb_param_grid = {}
+
     clfs = {"ebm":
                 {"classifier": ebm,
-                "parameters": ebm_param_grid},
+                 "parameters": ebm_param_grid},
             "knn":
                 {"classifier": knn,
                  "parameters": knn_param_grid},
             "dt":
                 {"classifier": dt,
                  "parameters": dt_param_grid},
+            "nn":
+                {"classifier": nn,
+                "parameters": nn_param_grid},
             "rf":
                 {"classifier": rf,
                  "parameters": rf_param_grid},
-            "nn":
-                {"classifier": nn,
-                 "parameters": nn_param_grid}}
+            "xgb":
+                {"classifier": xgb,
+                 "parameters": xgb_param_grid}}
 
     clfs_performance = {"acc": [], "sns": [], "spc": [], "auc": []}
 
