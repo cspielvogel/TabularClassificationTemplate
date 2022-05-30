@@ -105,30 +105,17 @@ def main():
 
     # Setup classifiers
     ebm = ExplainableBoostingClassifier()
-    # ebm_param_grid = {"max_bins": [128, 256, 512],
-    #                   "max_interaction_bins": [16, 32, 64],
-    #                   "binning": ["uniform", "quantile"],
-    #                   "interactions": [10, 15, 20],
-    #                   "outer_bags": [4, 8, 16],
-    #                   "inner_bags": [0, 2, 8],
-    #                   "learning_rate": [0.001, 0.01, 0.1],
-    #                   "early_stopping_rounds": [40, 50, 60],
-    #                   "early_stopping_tolerance": [0.0001],
-    #                   "max_rounds": [7500],
-    #                   "min_samples_leaf": [2, 3, 4],
-    #                   "max_leaves": [2, 3, 4, 5],
-    #                   "n_jobs": [10]}
     ebm_param_grid = {"max_bins": [256],
                       "max_interaction_bins": [64],
                       "binning": ["quantile"],
                       "interactions": [15],
-                      "outer_bags": [16],
-                      "inner_bags": [8],
-                      "learning_rate": [0.001, 0.01, 0.1],
+                      "outer_bags": [8, 16],
+                      "inner_bags": [0, 8],
+                      "learning_rate": [0.001, 0.01],
                       "early_stopping_rounds": [50],
                       "early_stopping_tolerance": [0.0001],
                       "max_rounds": [7500],
-                      "min_samples_leaf": [4],
+                      "min_samples_leaf": [2, 4],
                       "max_leaves": [3],
                       "n_jobs": [10]}
     ebm_param_grid = {}     # TODO: reactivate parameter grids
@@ -168,8 +155,12 @@ def main():
     rf_param_grid = {}
 
     xgb = XGBClassifier()
-    xgb_param_grid = {}     # TODO: add parameter grid
-    xgb_param_grid = {}
+    xgb_param_grid = {"learning_rate": [0.20, 0.30],
+                      "max_depth": [4, 6, 8],
+                      "min_child_weight": [1, 3],
+                      "gamma": [0.0, 0.2],
+                      "colsample_bytree": [0.5, 0.7, 1.0]}
+    # xgb_param_grid = {}
 
     clfs = {"ebm":
                 {"classifier": ebm,
@@ -182,7 +173,7 @@ def main():
                  "parameters": dt_param_grid},
             "nn":
                 {"classifier": nn,
-                "parameters": nn_param_grid},
+                 "parameters": nn_param_grid},
             "rf":
                 {"classifier": rf,
                  "parameters": rf_param_grid},
@@ -216,11 +207,6 @@ def main():
         # Iterate over MCCV
         tqdm_bar = tqdm(np.arange(num_folds))
         for fold_index in tqdm_bar:
-
-            # Progressbar
-            if verbose is True:
-                tqdm_bar.set_description(str(f"[Model training] Processing classifier {clf_index+1} /"
-                                             f" {len(classifiers_to_run)} ({clf}) | Fold {fold_index+1} / {num_folds}"))
 
             # Split into training and test data
             x_train, x_test, y_train, y_test = train_test_split(x, y,
@@ -303,6 +289,11 @@ def main():
             performance_foldwise["spc"].append(spc)
             performance_foldwise["auc"].append(auc)
 
+            # Progressbar
+            if verbose is True:
+                tqdm_bar.set_description(str(f"[Model training] Finished classifier {clf_index+1} /"
+                                             f" {len(classifiers_to_run)} ({clf}) | Fold {fold_index+1} / {num_folds}"))
+
         # Setup final model
         seed = 0
         model = clfs[clf]["classifier"]
@@ -350,12 +341,12 @@ def main():
         with open(os.path.join(model_result_path, f"{clf}_model.pickle"), "wb") as file:
             pickle.dump(optimized_model.best_estimator_, file)
 
-        # Save hyperparameters of final model to file
+        # Save hyperparameters of final model to JSON file
         with open(os.path.join(model_result_path, f"{clf}_optimized_hyperparameters.json"), "w") as file:
             param_dict_json_conform = {}     # Necessary since JSON doesn't take some data types such as int32
             for key in optimized_model.best_params_:
                 try:
-                    param_dict_json_conform[key] = int(optimized_model.best_params_[key])
+                    param_dict_json_conform[key] = float(optimized_model.best_params_[key])
                 except ValueError:
                     param_dict_json_conform[key] = optimized_model.best_params_[key]
 
