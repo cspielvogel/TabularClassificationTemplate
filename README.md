@@ -3,7 +3,7 @@
 This project aims to create a template for solving classification problems for tabular data.
 The template handles binary and multi-class problems. Among others, the project includes an exploratory data analysis, a preprocessing pipeline before train/test splitting, a foldw-ise preprocessing pipeline after train/test splitting, a scalable and robust Monte Carlo cross-validation scheme, six classification algorithms which are evaluated for four performance metrics and set set of capabilities enabling explainability including visualizations.
 
-<img src="Assets/tct_workflow_simple.png" alt="Workflow diagram" width="600"/>
+<img src="Assets/tct_flow_simple.png" alt="Workflow diagram" width="600"/>
 
 Content:
 
@@ -31,14 +31,14 @@ Content:
     - Random Forest
     - Neural Network
 - Explainable Artificial Intelligence (XAI)
-    - Permutation feature importance
+    - Permutation feature importance (+ visualizations)
     - Partial dependence plots
-    - SHAP summary plot
+    - SHAP values (+ summary visualization)
 - Visualization of performance evaluation
     - Performances for each classification model via barplot
     - Confusion matrices
 
-Outputs:
+- Outputs:
     - EDA: results as HTML report
     - Intermediate data: preprocessed data for final models as CSV
     - Models: pickled objects and tuned hyperparameters as JSON
