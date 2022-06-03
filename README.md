@@ -52,34 +52,34 @@ Output content:
     
 Output structure:
     
-    ```
-    Results/
-        ├── EDA
-        |   ├── exploratory_data_analysis.html
-        |   └── umap.html
-        ├── Intermediate_Data
-        |   ├── preprocessed_features.csv
-        |   └── preprocessed_labels.csv
-        ├── Models
-        |   ├── ebm_model.pickle
-        |   ├── ebm_model_hyperparameters.json
-        |   └── ... (other pickled models and hyperparameters)
-        ├── Performance
-        |   ├── confusion_matrix-ebm.csv
-        |   ├── confusion_matrix-ebm.png
-        |   ├── ... (other models confusion matrices)
-        |   ├── performance.png
-        |   └── performances.csv
-        └── XAI
-            ├── partial_dependence-ebm_feature-1_class-A.png
-            ├── ... (PDPs of other features, models and classes)
-            ├── Permutation_importance_ebm-test.png
-            ├── Permutation_importance_ebm-train.png
-            ├── ... (other models permutation importances for train and test set)
-            ├── shap.csv
-            ├── shap_summary-ebm.png
-            └── ... (other models shap summary plots)
-    ```
+```
+Results/
+    ├── EDA
+    |   ├── exploratory_data_analysis.html
+    |   └── umap.html
+    ├── Intermediate_Data
+    |   ├── preprocessed_features.csv
+    |   └── preprocessed_labels.csv
+    ├── Models
+    |   ├── ebm_model.pickle
+    |   ├── ebm_model_hyperparameters.json
+    |   └── ... (other pickled models and hyperparameters)
+    ├── Performance
+    |   ├── confusion_matrix-ebm.csv
+    |   ├── confusion_matrix-ebm.png
+    |   ├── ... (other models confusion matrices)
+    |   ├── performance.png
+    |   └── performances.csv
+    └── XAI
+        ├── partial_dependence-ebm_feature-1_class-A.png
+        ├── ... (PDPs of other features, models and classes)
+        ├── Permutation_importance_ebm-test.png
+        ├── Permutation_importance_ebm-train.png
+        ├── ... (other models permutation importances for train and test set)
+        ├── shap.csv
+        ├── shap_summary-ebm.png
+        └── ... (other models shap summary plots)
+```
 
 ## Installation
 Clone this repository, navigate to the corresponding directory and install the supplied `requirements.txt`. The project was built using `python 3.9.5`.
