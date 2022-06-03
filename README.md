@@ -1,8 +1,7 @@
 # TabularClassificationTemplate
 
-```diff
-- **DISCLAIMER: This project is under construction**
-```
+[- **DISCLAIMER: This project is under construction** -]
+
 
 ## Summary
 This project aims to create a template for solving classification problems for tabular data.
