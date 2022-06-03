@@ -11,6 +11,7 @@ Template for binary classifications of tabular data including preprocessing
 # TODO: ensure that variable names used in savefig() don't contain special characters which can't be used in file name
 # TODO: Add surrogate models (maybe in a second line analysis script)
 # TODO: Add LCE? https://towardsdatascience.com/random-forest-or-xgboost-it-is-time-to-explore-lce-2fed913eafb8
+# TODO: shap.sample(data, K) or shap.kmeans(data, K) to summarize the background as K samples for shap speed up
 
 Input data format specifications:
     - As of now, a file path has to be supplied to the main function as string value for the variable "data_path";
@@ -217,7 +218,7 @@ def main():
                                                                 random_state=fold_index)
 
             # Perform standardization and feature imputation
-            intra_fold_preprocessor = TabularIntraFoldPreprocessor(imputation_method="mice",
+            intra_fold_preprocessor = TabularIntraFoldPreprocessor(imputation_method="knn",
                                                                    k="automated",
                                                                    normalization="standardize")
             intra_fold_preprocessor = intra_fold_preprocessor.fit(x_train)
