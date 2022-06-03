@@ -6,13 +6,11 @@ Created on Apr 15 21:56 2021
 
 Template for binary classifications of tabular data including preprocessing
 # TODO: Implement OO version of main function contents
-# TODO: Add one way partial dependence plots and maybe two way for top features
 # TODO: Add analysis flow diagram to README
 # TODO: Add commandline options /w argparse
 # TODO: ensure that variable names used in savefig() don't contain special characters which can't be used in file name
 # TODO: Add surrogate models (maybe in a second line analysis script)
 # TODO: Add LCE? https://towardsdatascience.com/random-forest-or-xgboost-it-is-time-to-explore-lce-2fed913eafb8
-# TODO: Add XGBoost?
 
 Input data format specifications:
     - As of now, a file path has to be supplied to the main function as string value for the variable "data_path";
@@ -26,6 +24,8 @@ Input data format specifications:
 import os
 import pickle
 import json
+import multiprocessing
+from joblib import parallel_backend
 
 import numpy as np
 import pandas as pd
@@ -58,14 +58,15 @@ def main():
     # Set hyperparameters
     num_folds = 5
     # label_name = "DPD_final"
-    # label_name = "1"
-    label_name = "OS_histo36"
+    label_name = "1"
+    # label_name = "OS_histo36"
     verbose = True
     # classifiers_to_run = ["ebm", "dt", "knn", "nn", "rf", "xgb"]
-    classifiers_to_run = ["xgb"]
+    classifiers_to_run = ["knn"]
 
     # Set output paths
-    output_path = r"C:\Users\cspielvogel\PycharmProjects\HNSCC"
+    # output_path = r"C:\Users\cspielvogel\PycharmProjects\HNSCC"
+    output_path = r"./"
     eda_result_path = os.path.join(output_path, r"Results/EDA/")
     explainability_result_path = os.path.join(output_path, r"Results/XAI/")
     model_result_path = os.path.join(output_path, r"Results/Models/")
@@ -74,8 +75,8 @@ def main():
 
     # Specify data location
     # data_path = "/home/cspielvogel/DataStorage/Bone_scintigraphy/Data/umap_feats_pg.csv"
-    # data_path = r"C:\Users\cspielvogel\PycharmProjects\TabularClassificationTemplate\Data\test_data.csv"
-    data_path = r"C:\Users\cspielvogel\Downloads\fdb_multiomics_w_labels_all.csv"
+    data_path = r"Data/test_data.csv"
+    # data_path = r"C:\Users\cspielvogel\Downloads\fdb_multiomics_w_labels_all.csv"
 
     # Create save directories if they do not exist yet
     for path in [eda_result_path, explainability_result_path, model_result_path, performance_result_path,
@@ -216,7 +217,9 @@ def main():
                                                                 random_state=fold_index)
 
             # Perform standardization and feature imputation
-            intra_fold_preprocessor = TabularIntraFoldPreprocessor(k="automated", normalization="standardize")
+            intra_fold_preprocessor = TabularIntraFoldPreprocessor(imputation_method="mice",
+                                                                   k="automated",
+                                                                   normalization="standardize")
             intra_fold_preprocessor = intra_fold_preprocessor.fit(x_train)
             x_train = intra_fold_preprocessor.transform(x_train)
             x_test = intra_fold_preprocessor.transform(x_test)
@@ -449,4 +452,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    cpu_count = multiprocessing.cpu_count()
+    allocated_threads = cpu_count - 2
+
+    with parallel_backend("threading", n_jobs=allocated_threads):
+        main()

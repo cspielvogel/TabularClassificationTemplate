@@ -28,10 +28,13 @@ import numbers
 
 import numpy as np
 import pandas as pd
+from pandas.core.common import SettingWithCopyWarning
 
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.impute import KNNImputer
-from pandas.core.common import SettingWithCopyWarning
+from sklearn.experimental import enable_iterative_imputer
+from sklearn.impute import IterativeImputer
+from sklearn.linear_model import LinearRegression
 
 # Ignore SettingWithCopyWarning resulting from creating pandas.DataFrames from numpy.ndarrays
 warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
@@ -204,20 +207,23 @@ class TabularIntraFoldPreprocessor:
     - TODO: SMOTE
     """
 
-    def __init__(self, k="automated", normalization="standardize"):
+    def __init__(self, imputation_method="mice", k="automated", normalization="standardize"):
         """
         Constructor
-        :param k: int indicating the k nearest neighbors for kNN-based imputation
-        :param normalization: string indicating the typ of normalization, must be one of "standardize", "minmax"
+        :param imputation_method: str indicating imputation method; can be either "mice" or "knn"
+        :param k: int indicating the k nearest neighbors for kNN-based imputation; ignored if imputation is "mice"
+        :param normalization: str indicating the typ of normalization, must be one of "standardize", "minmax"
         :return: None
         """
 
         # Ensure input parameter validity
+        assert imputation_method in ("mice", "knn"), "Parameter 'imputation' must be either 'mice' or 'knn'"
         assert isinstance(k, numbers.Number) or k == "automated", "Parameter 'k' must either be numeric or 'automated'"
-        assert normalization in ["standardize", "minmax"], \
+        assert normalization in ("standardize", "minmax"), \
             "Parameter 'normalization' must be one of ('standardize', 'minmax')"
 
         # Set attributes
+        self.imputation_method = imputation_method
         self.k = k  # Number of nearest neighbors for kNN imputation
         self.normalization = normalization  # Type of normalization to carry out
         self.is_fit = False
@@ -253,11 +259,23 @@ class TabularIntraFoldPreprocessor:
             scaler = MinMaxScaler()
         self.scaler = scaler.fit(self.data)
 
-        # Fill missing values
-        if self.k == "automated":    # Use rounded down number of samples divided by 20 but at least 3 as k
-            k = int(np.round(len(self.data) / 20, 0)) if np.round(len(self.data) / 20, 0) > 3 else 3
-        imputer = KNNImputer(n_neighbors=k)
-        self.imputer = imputer.fit(self.data)
+        if self.imputation_method == "knn":
+            # Fill missing values using k nearest neighbors
+            if self.k == "automated":    # Use rounded down number of samples divided by 20 but at least 3 as k
+                k = int(np.round(len(self.data) / 20, 0)) if np.round(len(self.data) / 20, 0) > 3 else 3
+            imputer = KNNImputer(n_neighbors=k)
+            self.imputer = imputer.fit(self.data)
+
+        elif self.imputation_method == "mice":
+            # Filling missing values using MICE
+            lr = LinearRegression()
+            imputer = IterativeImputer(estimator=lr,
+                                       missing_values=np.nan,
+                                       max_iter=10,
+                                       verbose=0,
+                                       imputation_order='roman',
+                                       random_state=0)
+            self.imputer = imputer.fit(self.data)
 
         # Set flag to indicate fitting was conducted
         self.is_fit = True
