@@ -1,5 +1,7 @@
 # TabularClassificationTemplate
 
+![#f03c15](DISCLAIMER: This project is under development) `#f03c15`
+
 ## Summary
 This project aims to create a template for solving classification problems for tabular data.
 The template handles *binary and multi-class* problems. Among others, the project includes an *exploratory data analysis*, a *preprocessing* pipeline before train/test splitting, a fold-wise preprocessing pipeline after train/test splitting, a scalable and robust *Monte Carlo cross-validation scheme*, *six classification algorithms* which are evaluated for *four performance metrics* and set set of capabilities enabling *explainable artificial intelligence* including visualizations.
@@ -40,13 +42,14 @@ Content:
     - Confusion matrices
 
 ## Output
+Output content:
     - EDA: results as `html` report
     - Intermediate data: preprocessed data for final models as `csv`
     - Models: `pickle` objects and tuned hyperparameters as `json`
     - Performance: Confusion matrices and overall performance metrics for each model as `csv` and visalization as `png`
     - XAI: Partial dependence plots, permutation feature importances and SHAP summary plots as `csv` and `png`
     
-    The output follows the following structure:
+Output structure:
     
     ```
     Results/
@@ -78,3 +81,20 @@ Content:
     ```
 
 ## Installation
+Clone this repository, navigate to the corresponding directory and install the supplied `requirements.txt`. The project was built using `python 3.9.5`.
+```
+pip install -r requirements.txt
+```
+Alternatively, the individual packages contained in the `requirements.txt` file can be installed manually.
+
+Afterwards, run the software can be run using 
+```
+python main.py
+```
+
+## System specifications
+For the sake of completeness, below are the specs of our system. However, depending on your dataset size, you might not need the exact same specs. Inference can also be done without GPU, however, it takes significantly longer.
+
+- Ubuntu 20.04 LTS (64-bit)
+- CPU: AMD® Ryzen threadripper 1920x 12-core processor × 24 
+- RAM: 62,7 GiB
