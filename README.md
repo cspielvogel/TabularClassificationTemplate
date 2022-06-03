@@ -1,6 +1,6 @@
 # TabularClassificationTemplate
 
-[- **DISCLAIMER: This project is under construction** -]
+**CAVE: This project is under construction**
 
 
 ## Summary
