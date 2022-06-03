@@ -1,7 +1,8 @@
 # TabularClassificationTemplate
 
+## Summary
 This project aims to create a template for solving classification problems for tabular data.
-The template handles binary and multi-class problems. Among others, the project includes an exploratory data analysis, a preprocessing pipeline before train/test splitting, a foldw-ise preprocessing pipeline after train/test splitting, a scalable and robust Monte Carlo cross-validation scheme, six classification algorithms which are evaluated for four performance metrics and set set of capabilities enabling explainability including visualizations.
+The template handles *binary and multi-class* problems. Among others, the project includes an *exploratory data analysis*, a *preprocessing* pipeline before train/test splitting, a fold-wise preprocessing pipeline after train/test splitting, a scalable and robust *Monte Carlo cross-validation scheme*, *six classification algorithms* which are evaluated for *four performance metrics* and set set of capabilities enabling *explainable artificial intelligence* including visualizations.
 
 <img src="Assets/tct_flow_simple.png" alt="Workflow diagram" width="600"/>
 
@@ -38,9 +39,42 @@ Content:
     - Performances for each classification model via barplot
     - Confusion matrices
 
-- Outputs:
-    - EDA: results as HTML report
-    - Intermediate data: preprocessed data for final models as CSV
-    - Models: pickled objects and tuned hyperparameters as JSON
-    - Performance: Confusion matrices and overall performance metrics for each model as CSV and visalization
-    - XAI: Partial dependence plots, permutation feature importances and SHAP summary plots
+## Output
+    - EDA: results as `html` report
+    - Intermediate data: preprocessed data for final models as `csv`
+    - Models: `pickle` objects and tuned hyperparameters as `json`
+    - Performance: Confusion matrices and overall performance metrics for each model as `csv` and visalization as `png`
+    - XAI: Partial dependence plots, permutation feature importances and SHAP summary plots as `csv` and `png`
+    
+    The output follows the following structure:
+    
+    ```
+    Results/
+        ├── EDA
+        |   ├── exploratory_data_analysis.html
+        |   └── umap.html
+        ├── Intermediate_Data
+        |   ├── preprocessed_features.csv
+        |   └── preprocessed_labels.csv
+        ├── Models
+        |   ├── ebm_model.pickle
+        |   ├── ebm_model_hyperparameters.json
+        |   └── ... (other pickled models and hyperparameters)
+        ├── Performance
+        |   ├── confusion_matrix-ebm.csv
+        |   ├── confusion_matrix-ebm.png
+        |   ├── ... (other models confusion matrices)
+        |   ├── performance.png
+        |   └── performances.csv
+        └── XAI
+            ├── partial_dependence-ebm_feature-1_class-A.png
+            ├── ... (PDPs of other features, models and classes)
+            ├── Permutation_importance_ebm-test.png
+            ├── Permutation_importance_ebm-train.png
+            ├── ... (other models permutation importances for train and test set)
+            ├── shap.csv
+            ├── shap_summary-ebm.png
+            └── ... (other models shap summary plots)
+    ```
+
+## Installation
