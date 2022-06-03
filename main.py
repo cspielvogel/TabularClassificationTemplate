@@ -58,15 +58,11 @@ from explainability_tools import plot_importances, plot_shap_features, plot_part
 def main():
     # Set hyperparameters
     num_folds = 5
-    # label_name = "DPD_final"
     label_name = "1"
-    # label_name = "OS_histo36"
     verbose = True
-    # classifiers_to_run = ["ebm", "dt", "knn", "nn", "rf", "xgb"]
-    classifiers_to_run = ["knn"]
+    classifiers_to_run = ["ebm", "dt", "knn", "nn", "rf", "xgb"]
 
     # Set output paths
-    # output_path = r"C:\Users\cspielvogel\PycharmProjects\HNSCC"
     output_path = r"./"
     eda_result_path = os.path.join(output_path, r"Results/EDA/")
     explainability_result_path = os.path.join(output_path, r"Results/XAI/")
@@ -75,9 +71,7 @@ def main():
     intermediate_data_path = os.path.join(output_path, r"Results/Intermediate_Data")
 
     # Specify data location
-    # data_path = "/home/cspielvogel/DataStorage/Bone_scintigraphy/Data/umap_feats_pg.csv"
     data_path = r"Data/test_data.csv"
-    # data_path = r"C:\Users\cspielvogel\Downloads\fdb_multiomics_w_labels_all.csv"
 
     # Create save directories if they do not exist yet
     for path in [eda_result_path, explainability_result_path, model_result_path, performance_result_path,
@@ -101,7 +95,6 @@ def main():
 
     # Separate data into training and test
     y = df[label_name]
-    # y = (df[label_name] < 2) * 1    # TODO: remove; only for PG classification
     x = df.drop(label_name, axis="columns")
     feature_names = x.columns
 
@@ -120,14 +113,12 @@ def main():
                       "min_samples_leaf": [2, 4],
                       "max_leaves": [3],
                       "n_jobs": [10]}
-    ebm_param_grid = {}     # TODO: reactivate parameter grids
 
     knn = KNeighborsClassifier()
     knn_param_grid = {"weights": ["distance"],
                       "n_neighbors": [int(val) for val in np.round(np.sqrt(x.shape[1])) + np.arange(5) + 1] +
                                      [int(val) for val in np.round(np.sqrt(x.shape[1])) - np.arange(5) if val >= 1],
                       "p": np.arange(1, 5)}
-    knn_param_grid = {}
 
     dt = DecisionTreeClassifier()
     dt_param_grid = {"splitter": ["best", "random"],
@@ -135,7 +126,6 @@ def main():
                      "min_samples_split": [2, 4, 6],
                      "min_samples_leaf": [1, 3, 5, 6],
                      "max_features": ["auto", "sqrt", "log2"]}
-    dt_param_grid = {}
 
     nn = MLPClassifier()
     nn_param_grid = {"hidden_layer_sizes": [(32, 64, 32)],
@@ -145,7 +135,6 @@ def main():
                      "activation": ["relu", "tanh", "logistic"],
                      "solver": ["adam"],
                      "learning_rate_init": [0.01, 0.001, 0.0001]}
-    nn_param_grid = {}
 
     rf = RandomForestClassifier()
     rf_param_grid = {"criterion": ["entropy"],
@@ -154,7 +143,6 @@ def main():
                      "min_samples_split": [2, 4, 6],
                      "min_samples_leaf": [1, 3, 5, 6],
                      "max_features": ["auto", "sqrt", "log2"]}
-    rf_param_grid = {}
 
     xgb = XGBClassifier()
     xgb_param_grid = {"learning_rate": [0.20, 0.30],
@@ -162,7 +150,6 @@ def main():
                       "min_child_weight": [1, 3],
                       "gamma": [0.0, 0.2],
                       "colsample_bytree": [0.5, 0.7, 1.0]}
-    # xgb_param_grid = {}
 
     clfs = {"ebm":
                 {"classifier": ebm,
@@ -229,7 +216,6 @@ def main():
             selected_indices, x_train, x_test = mrmr_feature_selection(x_train.values,
                                                                        y_train.values,
                                                                        x_test.values,
-                                                                       # score_func=f_classif,
                                                                        num_features="log2n")
             feature_names_selected = feature_names[selected_indices]
 
