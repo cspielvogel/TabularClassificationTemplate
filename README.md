@@ -1,14 +1,9 @@
 # TabularClassificationTemplate
 
-This project aims to create a template for solving classification problems using Scikit-Learn for
-tabular data.
-The template shall handle binary as well as multi-class classification problems and shall include
-a preprocessing pipeline. Further, the template shall be easily adaptable and extendible for a
-simple integration into larger machine learning workflows.
+This project aims to create a template for solving classification problems for tabular data.
+The template handles binary and multi-class problems. Among others, the project includes an exploratory data analysis, a preprocessing pipeline before train/test splitting, a foldw-ise preprocessing pipeline after train/test splitting, a scalable and robust Monte Carlo cross-validation scheme, six classification algorithms which are evaluated for four performance metrics and set set of capabilities enabling explainability including visualizations.
 
-<!---
-<img src="Assets/tct_workflow_details.png" alt="Workflow diagram" width="600"/>
--->
+<img src="Assets/tct_workflow_simple.png" alt="Workflow diagram" width="600"/>
 
 Content:
 
@@ -30,6 +25,7 @@ Content:
 - Hyperparameter optimization (Using random grid search)
 - Training and evaluation of multiple classification algorithms
     - Explainable Boosting Machine
+    - XGBoost
     - k-nearest Neighbors
     - Decision Tree
     - Random Forest
