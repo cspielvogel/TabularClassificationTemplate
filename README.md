@@ -1,6 +1,6 @@
 # TabularClassificationTemplate
 
-![#f03c15](DISCLAIMER: This project is under development) `#f03c15`
+<span style="color:red">**DISCLAIMER: This project is under construction**</span>.
 
 ## Summary
 This project aims to create a template for solving classification problems for tabular data.
