@@ -25,6 +25,7 @@ Content:
 
 import warnings
 import numbers
+import pickle
 
 import numpy as np
 import pandas as pd
@@ -151,20 +152,20 @@ class TabularPreprocessor:
                           self.data[column].values[0]):
                     self.data = self.data.drop(column, axis="columns")
 
-        # # From https://github.com/slundberg/shap/issues/451
-        # # We have to transform categorical variables to use sklearn models
+        # # Transform categorial features to one hot encoded features (from https://github.com/slundberg/shap/issues/451)
         # from sklearn.preprocessing import OneHotEncoder
         #
-        # categorical_mask = X.dtypes == object
+        # categorical_mask = self.data.dtypes == object
         # # Filter categoricals
-        # categorical_cols = features[categorical_mask].tolist()
+        # categorical_cols = self.data.columns[categorical_mask].tolist()
         #
         # ohe = OneHotEncoder(handle_unknown='ignore', sparse=False)
         #
         # # Transform
-        # ohe.fit(df[categorical_cols])
+        # ohe.fit(self.data[categorical_cols])
+        #
         # # Save encoding for future downstream task.
-        # cat_ohe = ohe.transform(df[categorical_cols])
+        # cat_ohe = ohe.transform(self.data[categorical_cols])
         # dump(ohe,. / data / models / adult_encoder.joblib
         # ")
         # encoding_path = './data/models/adult_encoder.pkl'
@@ -207,12 +208,16 @@ class TabularIntraFoldPreprocessor:
     - TODO: SMOTE
     """
 
-    def __init__(self, imputation_method="mice", k="automated", normalization="standardize"):
+    def __init__(self, imputation_method="mice", k="automated", normalization="standardize", imputer_path=None,
+                 scaler_path=None):
         """
         Constructor
+
         :param imputation_method: str indicating imputation method; can be either "mice" or "knn"
         :param k: int indicating the k nearest neighbors for kNN-based imputation; ignored if imputation is "mice"
         :param normalization: str indicating the typ of normalization, must be one of "standardize", "minmax"
+        :param imputer_path: str indicating the file path to save the imputer; Imputer will not be saved if None
+        :param scaler_path: str indicating the file path to save the scaler; Scaler will not be saved if None
         :return: None
         """
 
@@ -232,6 +237,8 @@ class TabularIntraFoldPreprocessor:
         self.data = None    # Data used for fitting
         self.scaler = None
         self.imputer = None
+        self.imputer_path = imputer_path
+        self.scaler_path = scaler_path
 
     def fit(self, data):
         """
@@ -259,6 +266,11 @@ class TabularIntraFoldPreprocessor:
             scaler = MinMaxScaler()
         self.scaler = scaler.fit(self.data)
 
+        if self.scaler_path is not None:
+            # Save scaler to pickled file
+            with open(self.scaler_path, "wb") as file:
+                pickle.dump(self.scaler, file)
+
         if self.imputation_method == "knn":
             # Fill missing values using k nearest neighbors
             if self.k == "automated":    # Use rounded down number of samples divided by 20 but at least 3 as k
@@ -276,6 +288,11 @@ class TabularIntraFoldPreprocessor:
                                        imputation_order='roman',
                                        random_state=0)
             self.imputer = imputer.fit(self.data)
+
+        if self.imputer_path is not None:
+            # Save scaler to pickled file
+            with open(self.imputer_path, "wb") as file:
+                pickle.dump(self.imputer, file)
 
         # Set flag to indicate fitting was conducted
         self.is_fit = True

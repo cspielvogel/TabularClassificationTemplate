@@ -11,6 +11,8 @@ Template for binary classifications of tabular data including preprocessing
 # TODO: ensure that variable names used in savefig() don't contain special characters which can't be used in file name
 # TODO: Add surrogate models (maybe in a second line analysis script)
 # TODO: Add LCE? https://towardsdatascience.com/random-forest-or-xgboost-it-is-time-to-explore-lce-2fed913eafb8
+# TODO: Validate functionality of pickled files after loading
+# TODO: SHAP speedup (shap.sample(data, K) or shap.kmeans(data, K) to summarize the background as K samples)
 
 Input data format specifications:
     - As of now, a file path has to be supplied to the main function as string value for the variable "data_path";
@@ -303,7 +305,12 @@ def main():
         model.random_state = seed
 
         # Preprocess data for creation of final model
-        intra_fold_preprocessor = TabularIntraFoldPreprocessor(k="automated", normalization="standardize")
+        intra_fold_preprocessor = TabularIntraFoldPreprocessor(k="automated",
+                                                               normalization="standardize",
+                                                               imputer_path=os.path.join(intermediate_data_path,
+                                                                                      f"{clf}_scaler.pickle"),
+                                                               scaler_path=os.path.join(intermediate_data_path,
+                                                                                      f"{clf}_imputer.pickle"))
         x_preprocessed = intra_fold_preprocessor.fit_transform(x)
 
         # Save preprocessed data
