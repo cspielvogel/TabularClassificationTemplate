@@ -1,11 +1,11 @@
 # TabularClassificationTemplate
 
-**CAVE: This project is under construction**
+**CAUTION: This repository is under construction**
 
 
 ## Summary
-This project aims to create a template for solving classification problems for tabular data.
-The template handles *binary and multi-class* problems. Among others, the project includes an *exploratory data analysis*, a *preprocessing* pipeline before train/test splitting, a fold-wise preprocessing pipeline after train/test splitting, a scalable and robust *Monte Carlo cross-validation scheme*, *six classification algorithms* which are evaluated for *four performance metrics* and set set of capabilities enabling *explainable artificial intelligence* including visualizations.
+This project aims to create a template for solving classification problems based on tabular data.
+The template handles *binary and multi-class* problems. Among others, the project includes an *exploratory data analysis*, a *preprocessing* pipeline before train/test splitting, a fold-wise preprocessing pipeline after train/test splitting, a scalable and robust *Monte Carlo cross-validation scheme*, *six classification algorithms* which are evaluated for *four performance metrics* and a set of capabilities enabling *explainable artificial intelligence* including visualizations.
 
 <img src="Assets/tct_flow_simple.png" alt="Workflow diagram" width="600"/>
 
@@ -15,18 +15,18 @@ Content:
 - Preprocessing
     - Removing all-NA instances
     - Removing features with constant value over all instances (ignoring NaNs)
-    - Removing features with too many missing values
+    - Removing features with a user-provided ratio of missing values
 - Fold-wise preprocessing
-    - Normalization
-    - Filling missing values using kNN imputation
+    - Normalization / Standardization
+    - Filling missing values using kNN or MICE imputation
     - Resampling for handling label imbalances via SMOTE
 - Performance estimation using Monte Carlo cross validation with multiple metrics
     - Accuracy
     - AUC
     - Sensitivity / Recall
     - Specificity
-- Feature selection using mRMR
-- Hyperparameter optimization (Using random grid search)
+- Feature selection using mRMR (or univariate filter methods)
+- Hyperparameter optimization (using randomized search)
 - Training and evaluation of multiple classification algorithms
     - Explainable Boosting Machine
     - XGBoost
@@ -39,7 +39,7 @@ Content:
     - Partial dependence plots
     - SHAP values (+ summary visualization)
 - Visualization of performance evaluation
-    - Performances for each classification model via barplot
+    - Performance metrics for each classification model
     - Confusion matrices
 
 ## Output
@@ -73,8 +73,8 @@ Results/
     └── XAI
         ├── partial_dependence-ebm_feature-1_class-A.png
         ├── ... (PDPs of other features, models and classes)
-        ├── Permutation_importance_ebm-test.png
-        ├── Permutation_importance_ebm-train.png
+        ├── permutation_importance_ebm-test.png
+        ├── permutation_importance_ebm-train.png
         ├── ... (other models permutation importances for train and test set)
         ├── shap.csv
         ├── shap_summary-ebm.png
@@ -82,19 +82,19 @@ Results/
 ```
 
 ## Installation
-Clone this repository, navigate to the corresponding directory and install the supplied `requirements.txt`. The project was built using `python 3.9.5`.
+Clone this repository, navigate to the corresponding directory and install the supplied `requirements.txt`. The project was built using `python 3.9.4`.
 ```
 pip install -r requirements.txt
 ```
 Alternatively, the individual packages contained in the `requirements.txt` file can be installed manually.
 
-Afterwards, run the software can be run using 
+Afterwards, run the software using 
 ```
 python main.py
 ```
 
 ## System specifications
-For the sake of completeness, below are the specs of our system. However, depending on your dataset size, you might not need the exact same specs. Inference can also be done without GPU, however, it takes significantly longer.
+The test system specifications can be found below. Depending on the dataset used, required system specifications vary.
 
 - Ubuntu 20.04 LTS (64-bit)
 - CPU: AMD® Ryzen threadripper 1920x 12-core processor × 24 
