@@ -380,11 +380,11 @@ def main():
         overall_std_importances_val = raw_importances_foldwise_std_val / num_folds
 
         # Plot feature importances as determined using training and validation data
-        plot_title_permutation_importance = f"Permutation importance {clf} "
+        plot_title_permutation_importance = f"permutation_importance_{clf}"
         plot_importances(importances_mean=overall_mean_importances_train,
                          importances_std=overall_std_importances_train,
                          feature_names=feature_names_selected,
-                         plot_title=plot_title_permutation_importance + " - Training data",
+                         plot_title=plot_title_permutation_importance + "-training_data",
                          order_alphanumeric=True,
                          include_top=0,
                          display_plots=False,
@@ -394,7 +394,7 @@ def main():
         plot_importances(importances_mean=overall_mean_importances_val,
                          importances_std=overall_std_importances_val,
                          feature_names=feature_names_selected,
-                         plot_title=plot_title_permutation_importance + " - Validation data",
+                         plot_title=plot_title_permutation_importance + "-validation_data",
                          order_alphanumeric=True,
                          include_top=0,
                          display_plots=False,
