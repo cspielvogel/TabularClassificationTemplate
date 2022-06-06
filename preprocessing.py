@@ -11,8 +11,7 @@ Content:
         - Removing all-NA instances
         - Remove constant features
         - Removing features with too many missing values (default > 20% NaNs)
-        - TODO: convert categorical to one-hot encoded features (see commented out code); only normalize numeric cols
-        - TODO: removal of correlated features (foldwise)
+
         - TODO: remove samples that have all NA except for label (dropna with thres? for percent missing?)
 
     - Fold-wise preprocessing pipeline

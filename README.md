@@ -7,7 +7,7 @@
 This project aims to create a template for solving classification problems based on tabular data.
 The template handles *binary and multi-class* problems. Among others, the project includes an *exploratory data analysis*, a *preprocessing* pipeline before train/test splitting, a fold-wise preprocessing pipeline after train/test splitting, a scalable and robust *Monte Carlo cross-validation scheme*, *six classification algorithms* which are evaluated for *four performance metrics* and a set of capabilities enabling *explainable artificial intelligence* including visualizations.
 
-<img src="Assets/tct_flow_simple.png" alt="Workflow diagram" width="500"/>
+<img src="Assets/tct_flow_simple.png" alt="Workflow diagram" width="600"/>
 
 Content:
 
