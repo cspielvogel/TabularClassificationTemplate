@@ -13,6 +13,7 @@ Template for binary classifications of tabular data including preprocessing
 # TODO: Add LCE? https://towardsdatascience.com/random-forest-or-xgboost-it-is-time-to-explore-lce-2fed913eafb8
 # TODO: Validate functionality of pickled files after loading
 # TODO: SHAP speedup (shap.sample(data, K) or shap.kmeans(data, K) to summarize the background as K samples)
+# TODO: Handle NA imputation for categorical values
 
 Input data format specifications:
     - As of now, a file path has to be supplied to the main function as string value for the variable "data_path";
@@ -89,21 +90,24 @@ def main():
     # Load data to table
     df = pd.read_csv(data_path, sep=";", index_col=0)
 
-    # Perform EDA and save results
-    run_eda(features=df.drop(label_name, axis="columns"),
-            labels=df[label_name],
-            label_column=label_name,
-            save_path=eda_result_path,
-            verbose=verbose)
+    # # Perform EDA and save results
+    # run_eda(features=df.drop(label_name, axis="columns"),
+    #         labels=df[label_name],
+    #         label_column=label_name,
+    #         save_path=eda_result_path,
+    #         verbose=verbose)
 
     # Perform standardized preprocessing
-    preprocessor = TabularPreprocessor()
-    df = preprocessor.fit_transform(df, label_name=label_name)
+    preprocessor = TabularPreprocessor(label_name=label_name,
+                                       one_hot_encoder_path=os.path.join(intermediate_data_path,
+                                                                         f"one_hot_encoder.pickle"))
+    df = preprocessor.fit_transform(df)
 
     # Separate data into training and test
     y = df[label_name]
     # y = (df[label_name] < 2) * 1    # TODO: remove; only for PG classification
     x = df.drop(label_name, axis="columns")
+    print("y", len(list(y.values)))
     feature_names = x.columns
 
     # Setup classifiers
