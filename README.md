@@ -13,7 +13,7 @@ Content:
 
 - Exploratory data analysis 
     - Report via Pandas Profiling
-    - Visualization by dimnesionality reduction (via PCA, tSNE and UMAP)
+    - Visualization by dimensionality reduction (via PCA, tSNE and UMAP)
 - Preprocessing
     - Removing all-NA instances
     - Removing features with constant value over all instances (ignoring NaNs)
