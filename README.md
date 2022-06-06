@@ -11,11 +11,14 @@ The template handles *binary and multi-class* problems. Among others, the projec
 
 Content:
 
-- Exploratory data analysis via Pandas Profiling
+- Exploratory data analysis 
+    - Report via Pandas Profiling
+    - Visualization by dimnesionality reduction (via PCA, tSNE and UMAP)
 - Preprocessing
     - Removing all-NA instances
     - Removing features with constant value over all instances (ignoring NaNs)
     - Removing features with a user-provided ratio of missing values
+    - One hot encoding of non-numeric features
 - Fold-wise preprocessing
     - Normalization / Standardization
     - Filling missing values using kNN or MICE imputation
