@@ -36,6 +36,7 @@ from sklearn.impute import KNNImputer
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer
 from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import OneHotEncoder
 
 # Ignore SettingWithCopyWarning resulting from creating pandas.DataFrames from numpy.ndarrays
 warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
@@ -47,10 +48,13 @@ class TabularPreprocessor:
     applied
     """
 
-    def __init__(self, max_missing_ratio=0.2):
+    def __init__(self, label_name, max_missing_ratio=0.2, one_hot_encoder_path=None):
         """
         Constructor
+        :param label_name: str indicating column name containing label
         :param max_missing_ratio: float indicating the maximum ratio of missing to all feature values to keep a feature
+        :param one_hot_encoder_path: str indicating the file path on which to save one hot encoder, Not saved if None
+        :return: None
         """
 
         # Ensure input parameter validity
@@ -59,14 +63,17 @@ class TabularPreprocessor:
         assert max_missing_ratio >= 0, "Parameter 'max_missing_ratio' must be larger or equal to 0"
 
         # Set attributes
-        self.data = None
-        self.label_name = None
         self.max_missing_ratio = max_missing_ratio
+        self.one_hot_encoder_path = one_hot_encoder_path
+        self.label_name = label_name
+        self.one_hot_encoder = None
+        self.categorical_columns = None
         self.is_fit = False
 
-    def _remove_partially_missing(self, axis="columns"):
+    def _remove_partially_missing(self, data, axis="columns"):
         """
         Removal of features or instances with missing features above the given ratio
+        :param data: pandas.DataFrame containing the data to be preprocessed
         :param axis: string (must be one of "rows" or "columns) indicating whether to remove rows or columns
         :return: pandas.DataFrame without rows or columns with missing values above the max_missing_ratio
         """
@@ -74,46 +81,46 @@ class TabularPreprocessor:
         # Ensure valid parameters
         assert axis in ["columns", "rows"], "Parameter 'axis' must be one of ['columns', 'rows']"
 
-        iterable = self.data.columns if axis == "columns" else self.data.index
+        iterable = data.columns if axis == "columns" else data.index
 
         for subset in iterable:
             if axis == "columns":
-                missing_ratio = self.data.loc[:, subset].isnull().sum() / self.data.shape[0]
+                missing_ratio = data.loc[:, subset].isnull().sum() / data.shape[0]
             else:
-                missing_ratio = self.data.loc[subset, :].isnull().sum() / self.data.shape[1]
+                missing_ratio = data.loc[subset, :].isnull().sum() / data.shape[1]
 
             if missing_ratio > self.max_missing_ratio:
-                self.data = self.data.drop(subset, axis=axis)
+                data.drop(subset, axis=axis, inplace=True)
 
-        return self.data
+        return data
 
-    def fit(self, data, label_column):
+    def fit(self, data):
         """
         Fitting the standard preprocessing pipeline before transformation.
         Includes removal of instances with only missing values, removal of features with more than 20 % missing values,
         kNN-based imputation for missing values, and removal of correlated features.
         :param data: pandas.DataFrame containing the data to be preprocessed
-        :param label_column: str indicating the column name containing the label
         :return: TabularPreprocessor fitted with the given parameters
         """
 
         # Ensure valid parameters
         assert isinstance(data, pd.DataFrame), "Parameter 'data' must be an instance of pandas.DataFrame"
 
-        # Assign data to attribute
-        self.data = data
-
-        # Assign label to attribute
-        self.label_name = label_column
+        # Fit one hot encoding for categorial features
+        categorical_mask = data.dtypes == object
+        self.categorical_columns = data.columns[categorical_mask].tolist()
+        self.one_hot_encoder = OneHotEncoder(handle_unknown='ignore', sparse=False)  # TODO: check arguments
+        self.one_hot_encoder.fit(data[self.categorical_columns])
 
         # Set flag indicating conducted fitting
         self.is_fit = True
 
         return self
 
-    def transform(self):
+    def transform(self, data):
         """
         Transforming data using the fitted TabularPreprocessor
+        :param data: pandas.DataFrame containing the data to be preprocessed
         :return: pandas.DataFrame with the fitted data
         """
 
@@ -121,78 +128,68 @@ class TabularPreprocessor:
         assert self.is_fit is True, ".fit() has to be called before transforming any data"
 
         # Only keep first instance if multiple instances have the same key
-        num_instances_before = len(self.data)
-        self.data = self.data[~self.data.index.duplicated(keep="first")]
-        num_instances_diff = num_instances_before - len(self.data)
+        num_instances_before = len(data)
+        data = data[~data.index.duplicated(keep="first")]
+        num_instances_diff = num_instances_before - len(data)
         if num_instances_diff > 0:
             print(f"[Warning] {num_instances_diff} instance(s) removed due to duplicate keys"
                   f"- only keeping first occurrence!")
 
         # Remove instances with missing label
-        num_label_nans = self.data[self.label_name].isnull().sum()
-        self.data.dropna(subset=[self.label_name], inplace=True)
+        num_label_nans = data[self.label_name].isnull().sum()
+        data.dropna(subset=[self.label_name], inplace=True)
 
         if num_label_nans > 0:
             print(f"[Warning] {num_label_nans} sample(s) removed due to missing label!")
 
         # Removal of instances with only missing values
-        self.data = self.data.dropna(how="all", axis="rows")
+        data.dropna(how="all", axis="rows", inplace=True)
 
         # Remove features with more than given percentage of missing values (self.max_missing_ratio)
-        self.data = self._remove_partially_missing(axis="columns")
+        data = self._remove_partially_missing(data, axis="columns")
 
         # Remove features with constant value over all instances while ignoring NaNs
-        for column in self.data.columns:
-            if self.data[column].dtype == "int64":
-                if np.all(self.data[column][~np.isnan(self.data[column])].values ==
-                          self.data[column][~np.isnan(self.data[column])].values[0]):
-                    self.data = self.data.drop(column, axis="columns")
+        for column in data.columns:
+            if data[column].dtype == "int64":
+                if np.all(data[column][~np.isnan(data[column])].values ==
+                          data[column][~np.isnan(data[column])].values[0]):
+                    data = data.drop(column, axis="columns")
             else:
-                if np.all(np.array([i for i in self.data[column] if not i in ['nan', np.nan]]) ==
-                          self.data[column].values[0]):
-                    self.data = self.data.drop(column, axis="columns")
+                if np.all(np.array([i for i in data[column] if not i in ['nan', np.nan]]) ==
+                          data[column].values[0]):
+                    data = data.drop(column, axis="columns")
 
-        # # Transform categorial features to one hot encoded features (from https://github.com/slundberg/shap/issues/451)
-        # from sklearn.preprocessing import OneHotEncoder
-        #
-        # categorical_mask = self.data.dtypes == object
-        # # Filter categoricals
-        # categorical_cols = self.data.columns[categorical_mask].tolist()
-        #
-        # ohe = OneHotEncoder(handle_unknown='ignore', sparse=False)
-        #
-        # # Transform
-        # ohe.fit(self.data[categorical_cols])
-        #
-        # # Save encoding for future downstream task.
-        # cat_ohe = ohe.transform(self.data[categorical_cols])
-        # dump(ohe,. / data / models / adult_encoder.joblib
-        # ")
-        # encoding_path = './data/models/adult_encoder.pkl'
-        # with open(encoding_path, "wb") as f:
-        #     pickle.dump(ohe, f)
-        #
-        # ohe_df = pd.DataFrame(cat_ohe, columns=ohe.get_feature_names(input_features=categorical_cols))
-        # # concat with original data and drop original columns and create combined frame
-        # _X = pd.concat([X, ohe_df], axis=1).drop(columns=categorical_cols, axis=1)
+        # Check whether there are any categorical columns
+        if len(self.categorical_columns) != 0:
 
-        return self.data
+            # Apply one-hot encoding and save to pickle file
+            cat_ohe = self.one_hot_encoder.transform(data[self.categorical_columns])   # Will be all zero if unknown category in transform
 
-    def fit_transform(self, data, label_name):
+            with open(self.one_hot_encoder_path, "wb") as f:
+                pickle.dump(self.one_hot_encoder, f)
+
+            ohe_df = pd.DataFrame(cat_ohe,
+                                  columns=self.one_hot_encoder.get_feature_names(input_features=self.categorical_columns),
+                                  index=data.index)
+            data = pd.concat([data, ohe_df], axis="columns")
+            data.drop(columns=self.categorical_columns, axis="columns", inplace=True)
+
+        return data
+
+    def fit_transform(self, data):
         """
         Standard preprocessing pipeline returning the preprocessed data.
         Includes removal of instances with only missing values, removal of features with more than 20 % missing values,
         kNN-based imputation for missing values, and removal of correlated features.
         :param data: pandas.DataFrame containing the data to be preprocessed
-        :param label_name: str indicating column name containing label
         :return: pandas.DataFrame containing the preprocessed data
         """
 
         # Fit
-        self.fit(data=data, label_column=label_name)
+        self.fit(data=data)
 
         # Transform
-        data = self.transform()
+        data = self.transform(data)
 
         return data
 
@@ -214,7 +211,8 @@ class TabularIntraFoldPreprocessor:
         Constructor
 
         :param imputation_method: str indicating imputation method; can be either "mice" or "knn"
-        :param k: int indicating the k nearest neighbors for kNN-based imputation; ignored if imputation is "mice"
+        :param k: int indicating the k nearest neighbors for kNN-based imputation; Ignored if imputation is "mice";
+                  Use rounded down number of samples divided by 20 but at least 3 as k
         :param normalization: str indicating the typ of normalization, must be one of "standardize", "minmax"
         :param imputer_path: str indicating the file path to save the imputer; Imputer will not be saved if None
         :param scaler_path: str indicating the file path to save the scaler; Scaler will not be saved if None
@@ -234,7 +232,6 @@ class TabularIntraFoldPreprocessor:
         self.is_fit = False
 
         # Initialize attributes set during processing
-        self.data = None    # Data used for fitting
         self.scaler = None
         self.imputer = None
         self.imputer_path = imputer_path
@@ -254,17 +251,14 @@ class TabularIntraFoldPreprocessor:
         # Ensure that the number of nearest neighbors used for imputation is above zero if not a string
         if isinstance(self.k, numbers.Number):
             assert self.k > 0, "Parameter 'k' must have a value of 1 or larger"
-            assert self.k < len(self.data), "Parameter 'k' must be smaller of equal to the number of instances"
-
-        # Set data to attribute
-        self.data = data
+            assert self.k < len(data), "Parameter 'k' must be smaller of equal to the number of instances"
 
         # Normalize features
         if self.normalization == "standardize":
             scaler = StandardScaler()
         elif self.normalization == "minmax":
             scaler = MinMaxScaler()
-        self.scaler = scaler.fit(self.data)
+        self.scaler = scaler.fit(data)
 
         if self.scaler_path is not None:
             # Save scaler to pickled file
@@ -274,9 +268,9 @@ class TabularIntraFoldPreprocessor:
         if self.imputation_method == "knn":
             # Fill missing values using k nearest neighbors
             if self.k == "automated":    # Use rounded down number of samples divided by 20 but at least 3 as k
-                k = int(np.round(len(self.data) / 20, 0)) if np.round(len(self.data) / 20, 0) > 3 else 3
+                k = int(np.round(len(data) / 20, 0)) if np.round(len(data) / 20, 0) > 3 else 3
             imputer = KNNImputer(n_neighbors=k)
-            self.imputer = imputer.fit(self.data)
+            self.imputer = imputer.fit(data)
 
         elif self.imputation_method == "mice":
             # Filling missing values using MICE
@@ -287,7 +281,7 @@ class TabularIntraFoldPreprocessor:
                                        verbose=0,
                                        imputation_order='roman',
                                        random_state=0)
-            self.imputer = imputer.fit(self.data)
+            self.imputer = imputer.fit(data)
 
         if self.imputer_path is not None:
             # Save scaler to pickled file
@@ -299,7 +293,7 @@ class TabularIntraFoldPreprocessor:
 
         return self
 
-    def transform(self, data=None):
+    def transform(self, data):
         """
         Transforming data using the fitted TabularIntraFoldPreprocessor
         :param data: pandas.DataFrame containing data to transform using the fitted models, use data from fitting
@@ -309,10 +303,6 @@ class TabularIntraFoldPreprocessor:
 
         # Ensure pipeline instance has been fitted
         assert self.is_fit is True, ".fit() has to be called before transforming any data"
-
-        # If no data given, use data from fitting procedure
-        if data is None:
-            data = self.data
 
         # Ensure data is of type pandas.DataFrame
         assert isinstance(data, pd.DataFrame), "Parameter 'data' must be an instance of pandas.DataFrame"
