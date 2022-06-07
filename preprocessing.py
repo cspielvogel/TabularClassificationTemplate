@@ -204,7 +204,7 @@ class TabularIntraFoldPreprocessor:
     - TODO: SMOTE
     """
 
-    def __init__(self, imputation_method="mice", k="automated", normalization="standardize", imputer_path=None,
+    def __init__(self, imputation_method="knn", k="automated", normalization="standardize", imputer_path=None,
                  scaler_path=None):
         """
         Constructor

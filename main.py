@@ -61,17 +61,18 @@ from explainability_tools import plot_importances, plot_shap_features, plot_part
 
 def main():
     # Set hyperparameters
-    num_folds = 5
+    num_folds = 50
     # label_name = "DPD_final"
-    label_name = "1"
+    # label_name = "1"
     # label_name = "OS_histo36"
+    label_name = "Malign"
     verbose = True
-    # classifiers_to_run = ["ebm", "dt", "knn", "nn", "rf", "xgb"]
-    classifiers_to_run = ["knn"]
+    classifiers_to_run = ["ebm", "dt", "knn", "nn", "rf", "xgb"]
+    # classifiers_to_run = ["knn"]
 
     # Set output paths
     # output_path = r"C:\Users\cspielvogel\PycharmProjects\HNSCC"
-    output_path = r"./"
+    output_path = r"./ParotisMRI"
     eda_result_path = os.path.join(output_path, r"Results/EDA/")
     explainability_result_path = os.path.join(output_path, r"Results/XAI/")
     model_result_path = os.path.join(output_path, r"Results/Models/")
@@ -80,8 +81,9 @@ def main():
 
     # Specify data location
     # data_path = "/home/cspielvogel/DataStorage/Bone_scintigraphy/Data/umap_feats_pg.csv"
-    data_path = r"Data/test_data.csv"
+    # data_path = r"Data/test_data.csv"
     # data_path = r"C:\Users\cspielvogel\Downloads\fdb_multiomics_w_labels_all.csv"
+    data_path = r"/media/cspielvogel/DataStorage/ParotisMRI/Data/parotis_mri_radiomics11may2022_malign.csv"
 
     # Create save directories if they do not exist yet
     for path in [eda_result_path, explainability_result_path, model_result_path, performance_result_path,
@@ -92,12 +94,12 @@ def main():
     # Load data to table
     df = pd.read_csv(data_path, sep=";", index_col=0)
 
-    # # Perform EDA and save results
-    # run_eda(features=df.drop(label_name, axis="columns"),
-    #         labels=df[label_name],
-    #         label_column=label_name,
-    #         save_path=eda_result_path,
-    #         verbose=verbose)
+    # Perform EDA and save results
+    run_eda(features=df.drop(label_name, axis="columns"),
+            labels=df[label_name],
+            label_column=label_name,
+            save_path=eda_result_path,
+            verbose=verbose)
 
     # Perform standardized preprocessing
     preprocessor = TabularPreprocessor(label_name=label_name,
@@ -109,7 +111,7 @@ def main():
     y = df[label_name]
     # y = (df[label_name] < 2) * 1    # TODO: remove; only for PG classification
     x = df.drop(label_name, axis="columns")
-    print("y", len(list(y.values)))
+
     feature_names = x.columns
 
     # Setup classifiers
@@ -169,7 +171,7 @@ def main():
                       "min_child_weight": [1, 3],
                       "gamma": [0.0, 0.2],
                       "colsample_bytree": [0.5, 0.7, 1.0]}
-    # xgb_param_grid = {}
+    xgb_param_grid = {}
 
     clfs = {"ebm":
                 {"classifier": ebm,
@@ -225,7 +227,7 @@ def main():
                                                                 random_state=fold_index)
 
             # Perform standardization and feature imputation
-            intra_fold_preprocessor = TabularIntraFoldPreprocessor(imputation_method="mice",
+            intra_fold_preprocessor = TabularIntraFoldPreprocessor(imputation_method="knn",
                                                                    k="automated",
                                                                    normalization="standardize")
             intra_fold_preprocessor = intra_fold_preprocessor.fit(x_train)
@@ -323,14 +325,11 @@ def main():
         x_preprocessed_df = pd.DataFrame(data=x_preprocessed,
                                          index=x.index,
                                          columns=feature_names)
-        x_preprocessed_df.to_csv(os.path.join(output_path,
-                                              os.path.join(intermediate_data_path, "preprocessed_features.csv")),
+        x_preprocessed_df.to_csv(os.path.join(intermediate_data_path, "preprocessed_features.csv"),
                                  sep=";")
 
         y_df = pd.DataFrame(data=y, columns=[label_name])
-        y_df.to_csv(os.path.join(output_path,
-                                 os.path.join(intermediate_data_path, "preprocessed_labels.csv")),
-                    sep=";")
+        y_df.to_csv(os.path.join(intermediate_data_path, "preprocessed_labels.csv"), sep=";")
 
         # Feature selection for final model
         selected_indices_preprocessed, x_preprocessed, _ = mrmr_feature_selection(x_preprocessed,
