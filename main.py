@@ -11,7 +11,11 @@ Template for binary classifications of tabular data including preprocessing
 # TODO: ensure that variable names used in savefig() don't contain special characters which can't be used in file name
 # TODO: Add surrogate models (maybe in a second line analysis script)
 # TODO: Add LCE? https://towardsdatascience.com/random-forest-or-xgboost-it-is-time-to-explore-lce-2fed913eafb8
-# TODO: shap.sample(data, K) or shap.kmeans(data, K) to summarize the background as K samples for shap speed up
+# TODO: Validate functionality of pickled files after loading
+# TODO: SHAP speedup (shap.sample(data, K) or shap.kmeans(data, K) to summarize the background as K samples)
+# TODO: Handle NA imputation for categorical values
+# TODO: Perform imputation for entire dataset
+# TODO: Show feature correlation matrix for entire and final (after mrmr) data set
 
 Input data format specifications:
     - As of now, a file path has to be supplied to the main function as string value for the variable "data_path";
@@ -58,11 +62,15 @@ from explainability_tools import plot_importances, plot_shap_features, plot_part
 def main():
     # Set hyperparameters
     num_folds = 5
+    # label_name = "DPD_final"
     label_name = "1"
+    # label_name = "OS_histo36"
     verbose = True
-    classifiers_to_run = ["ebm", "dt", "knn", "nn", "rf", "xgb"]
+    # classifiers_to_run = ["ebm", "dt", "knn", "nn", "rf", "xgb"]
+    classifiers_to_run = ["knn"]
 
     # Set output paths
+    # output_path = r"C:\Users\cspielvogel\PycharmProjects\HNSCC"
     output_path = r"./"
     eda_result_path = os.path.join(output_path, r"Results/EDA/")
     explainability_result_path = os.path.join(output_path, r"Results/XAI/")
@@ -71,7 +79,9 @@ def main():
     intermediate_data_path = os.path.join(output_path, r"Results/Intermediate_Data")
 
     # Specify data location
+    # data_path = "/home/cspielvogel/DataStorage/Bone_scintigraphy/Data/umap_feats_pg.csv"
     data_path = r"Data/test_data.csv"
+    # data_path = r"C:\Users\cspielvogel\Downloads\fdb_multiomics_w_labels_all.csv"
 
     # Create save directories if they do not exist yet
     for path in [eda_result_path, explainability_result_path, model_result_path, performance_result_path,
@@ -82,20 +92,24 @@ def main():
     # Load data to table
     df = pd.read_csv(data_path, sep=";", index_col=0)
 
-    # Perform EDA and save results
-    run_eda(features=df.drop(label_name, axis="columns"),
-            labels=df[label_name],
-            label_column=label_name,
-            save_path=eda_result_path,
-            verbose=verbose)
+    # # Perform EDA and save results
+    # run_eda(features=df.drop(label_name, axis="columns"),
+    #         labels=df[label_name],
+    #         label_column=label_name,
+    #         save_path=eda_result_path,
+    #         verbose=verbose)
 
     # Perform standardized preprocessing
-    preprocessor = TabularPreprocessor()
-    df = preprocessor.fit_transform(df, label_name=label_name)
+    preprocessor = TabularPreprocessor(label_name=label_name,
+                                       one_hot_encoder_path=os.path.join(intermediate_data_path,
+                                                                         f"one_hot_encoder.pickle"))
+    df = preprocessor.fit_transform(df)
 
     # Separate data into training and test
     y = df[label_name]
+    # y = (df[label_name] < 2) * 1    # TODO: remove; only for PG classification
     x = df.drop(label_name, axis="columns")
+    print("y", len(list(y.values)))
     feature_names = x.columns
 
     # Setup classifiers
@@ -113,12 +127,14 @@ def main():
                       "min_samples_leaf": [2, 4],
                       "max_leaves": [3],
                       "n_jobs": [10]}
+    ebm_param_grid = {}     # TODO: reactivate parameter grids
 
     knn = KNeighborsClassifier()
     knn_param_grid = {"weights": ["distance"],
                       "n_neighbors": [int(val) for val in np.round(np.sqrt(x.shape[1])) + np.arange(5) + 1] +
                                      [int(val) for val in np.round(np.sqrt(x.shape[1])) - np.arange(5) if val >= 1],
                       "p": np.arange(1, 5)}
+    knn_param_grid = {}
 
     dt = DecisionTreeClassifier()
     dt_param_grid = {"splitter": ["best", "random"],
@@ -126,6 +142,7 @@ def main():
                      "min_samples_split": [2, 4, 6],
                      "min_samples_leaf": [1, 3, 5, 6],
                      "max_features": ["auto", "sqrt", "log2"]}
+    dt_param_grid = {}
 
     nn = MLPClassifier()
     nn_param_grid = {"hidden_layer_sizes": [(32, 64, 32)],
@@ -135,6 +152,7 @@ def main():
                      "activation": ["relu", "tanh", "logistic"],
                      "solver": ["adam"],
                      "learning_rate_init": [0.01, 0.001, 0.0001]}
+    nn_param_grid = {}
 
     rf = RandomForestClassifier()
     rf_param_grid = {"criterion": ["entropy"],
@@ -143,6 +161,7 @@ def main():
                      "min_samples_split": [2, 4, 6],
                      "min_samples_leaf": [1, 3, 5, 6],
                      "max_features": ["auto", "sqrt", "log2"]}
+    rf_param_grid = {}
 
     xgb = XGBClassifier()
     xgb_param_grid = {"learning_rate": [0.20, 0.30],
@@ -150,6 +169,7 @@ def main():
                       "min_child_weight": [1, 3],
                       "gamma": [0.0, 0.2],
                       "colsample_bytree": [0.5, 0.7, 1.0]}
+    # xgb_param_grid = {}
 
     clfs = {"ebm":
                 {"classifier": ebm,
@@ -205,7 +225,7 @@ def main():
                                                                 random_state=fold_index)
 
             # Perform standardization and feature imputation
-            intra_fold_preprocessor = TabularIntraFoldPreprocessor(imputation_method="knn",
+            intra_fold_preprocessor = TabularIntraFoldPreprocessor(imputation_method="mice",
                                                                    k="automated",
                                                                    normalization="standardize")
             intra_fold_preprocessor = intra_fold_preprocessor.fit(x_train)
@@ -216,6 +236,7 @@ def main():
             selected_indices, x_train, x_test = mrmr_feature_selection(x_train.values,
                                                                        y_train.values,
                                                                        x_test.values,
+                                                                       # score_func=f_classif,
                                                                        num_features="log2n")
             feature_names_selected = feature_names[selected_indices]
 
@@ -290,7 +311,12 @@ def main():
         model.random_state = seed
 
         # Preprocess data for creation of final model
-        intra_fold_preprocessor = TabularIntraFoldPreprocessor(k="automated", normalization="standardize")
+        intra_fold_preprocessor = TabularIntraFoldPreprocessor(k="automated",
+                                                               normalization="standardize",
+                                                               imputer_path=os.path.join(intermediate_data_path,
+                                                                                      f"{clf}_scaler.pickle"),
+                                                               scaler_path=os.path.join(intermediate_data_path,
+                                                                                      f"{clf}_imputer.pickle"))
         x_preprocessed = intra_fold_preprocessor.fit_transform(x)
 
         # Save preprocessed data
@@ -367,11 +393,11 @@ def main():
         overall_std_importances_val = raw_importances_foldwise_std_val / num_folds
 
         # Plot feature importances as determined using training and validation data
-        plot_title_permutation_importance = f"Permutation importance {clf} "
+        plot_title_permutation_importance = f"permutation_importance_{clf}"
         plot_importances(importances_mean=overall_mean_importances_train,
                          importances_std=overall_std_importances_train,
                          feature_names=feature_names_selected,
-                         plot_title=plot_title_permutation_importance + " - Training data",
+                         plot_title=plot_title_permutation_importance + "-training_data",
                          order_alphanumeric=True,
                          include_top=0,
                          display_plots=False,
@@ -381,7 +407,7 @@ def main():
         plot_importances(importances_mean=overall_mean_importances_val,
                          importances_std=overall_std_importances_val,
                          feature_names=feature_names_selected,
-                         plot_title=plot_title_permutation_importance + " - Validation data",
+                         plot_title=plot_title_permutation_importance + "-validation_data",
                          order_alphanumeric=True,
                          include_top=0,
                          display_plots=False,

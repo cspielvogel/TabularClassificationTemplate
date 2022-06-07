@@ -8,6 +8,8 @@ Included methods:
     - mRMR
     - Filter feature selection (e.g. ANOVA, chi squared)
 
+# TODO: use RFCQ instead of FCQ for RF models?
+
 @author: clemens
 """
 
