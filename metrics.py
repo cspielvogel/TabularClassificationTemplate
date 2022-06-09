@@ -8,6 +8,9 @@ Performance metrics for tabular data classification
 
 Content:
     - Performance estimation using Monte Carlo cross validation with multiple metrics
+        - Positive predictive value
+        - Negative predictive value
+        - Balanced accuracy
         - Accuracy
         - Sensitivity
         - Specificity
@@ -20,6 +23,86 @@ Content:
 import numpy as np
 
 from sklearn.metrics import confusion_matrix, roc_auc_score
+
+
+def positive_predictive_value(y_true, y_pred):
+    """
+    Calculate positive predictive value for confusion matrix with any number of classes
+    :param y_true: numpy.ndarray of 1 dimension or list indicating the actual classes for a set of instances
+                   CAVE: Instances must be in the same order as in parameter y_pred
+    :param y_pred: numpy.ndarray of 1 dimension or list indicating the predicted classes for a set of instances
+                   CAVE: Instances must be in the same order as in parameter y_true
+    :return: Float between 0 and 1 indicating the positive predictive value
+    """
+
+    # Compute confusion matrix
+    cm = confusion_matrix(y_true, y_pred)
+
+    # Binary classification
+    if cm.shape == (2, 2):
+        # Handle division by zero, (tp + fp) = 0
+        if (cm[1][1] + cm[0][1]) == 0:
+            ppv = 0
+        else:
+            ppv = cm[1][1] / (cm[1][1] + cm[0][1])
+
+    # Multiclass classification
+    else:
+        classwise_ppv = []
+        for i in np.arange(len(cm)):
+            tp = cm[i][i]
+            fp_and_tp = cm[:, i]
+            if np.sum(fp_and_tp) == 0:
+                classwise_ppv.append(0)
+            else:
+                classwise_ppv.append(tp / np.sum(fp_and_tp))
+            ppv = np.sum(classwise_ppv) / len(classwise_ppv)
+
+    return ppv
+
+
+def negative_predictive_value(y_true, y_pred):
+    """
+    Calculate negative predictive value for confusion matrix with any number of classes
+    :param y_true: numpy.ndarray of 1 dimension or list indicating the actual classes for a set of instances
+                   CAVE: Instances must be in the same order as in parameter y_pred
+    :param y_pred: numpy.ndarray of 1 dimension or list indicating the predicted classes for a set of instances
+                   CAVE: Instances must be in the same order as in parameter y_true
+    :return: Float between 0 and 1 indicating the negative predictive value
+    """
+
+    # Compute confusion matrix
+    cm = confusion_matrix(y_true, y_pred)
+
+    # Binary classification
+    if cm.shape == (2, 2):
+        # Handle division by zero, (tn + fn) = 0
+        if (cm[0][0] + cm[1][0]) == 0:
+            npv = 0
+        else:
+            npv = cm[0][0] / (cm[0][0] + cm[1][0])
+
+    # Multiclass classification
+    else:
+        # For multiclass classification NPV = PPV
+        npv = positive_predictive_value(y_true, y_pred)
+
+    return npv
+
+
+def balanced_accuracy(y_true, y_pred):
+    """
+    Calculate balanced accuracy for confusion matrix with any number of classes
+    :param y_true: numpy.ndarray of 1 dimension or list indicating the actual classes for a set of instances
+                   CAVE: Instances must be in the same order as in parameter y_pred
+    :param y_pred: numpy.ndarray of 1 dimension or list indicating the predicted classes for a set of instances
+                   CAVE: Instances must be in the same order as in parameter y_true
+    :return: Float between 0 and 1 indicating the balanced accuracy
+    """
+
+    bacc = 0.5 * (specificity(y_true, y_pred) + sensitivity(y_true, y_pred))
+
+    return bacc
 
 
 def accuracy(y_true, y_pred):
