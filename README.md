@@ -79,7 +79,8 @@ Results/
         ├── permutation_importance_ebm-test.png
         ├── permutation_importance_ebm-train.png
         ├── ... (other models permutation importances for train and test set)
-        ├── shap.csv
+        ├── label-0_shap-values.csv
+        ├── ... (other labels shap values if multiclass)
         ├── shap_summary-ebm.png
         └── ... (other models shap summary plots)
 ```

@@ -79,13 +79,12 @@ def plot_partial_dependences(model, x, y, feature_names, clf_name, save_path):
             plt.close()
 
 
-def plot_shap_features(model, x, num_classes, feature_names, index_names, clf_name, save_path, verbose=True):
+def plot_shap_features(model, x, feature_names, index_names, clf_name, save_path, verbose=True):
     """
     Compute SHAP values, save to file and create summary plots
 
     :param model: sklearn.base.BaseEstimator or derivative containing a trained model
     :param x: numpy.ndarray containing the feature values
-    :param num_classes: int indicating the number of classes used to train the model
     :param feature_names: numpy.ndarray 1D or a list containing the feature names as strings
     :param index_names: numpy.ndarray 1D or a list containing the sample names
     :param clf_name: str indicating the classifiers name
@@ -99,7 +98,8 @@ def plot_shap_features(model, x, num_classes, feature_names, index_names, clf_na
         print("[XAI] Computing SHAP importances")
 
     # Ensure plotting summary as bar for multiclass and beeswarm for binary classification
-    if num_classes > 2:
+    classes = model.best_estimator_.classes_
+    if len(classes) > 2:
         predictor = model.best_estimator_.predict_proba
     else:
         predictor = model.best_estimator_.predict
@@ -109,11 +109,17 @@ def plot_shap_features(model, x, num_classes, feature_names, index_names, clf_na
     shap_values = explainer.shap_values(x)
 
     # Save SHAP values to file
-    shap_df = pd.DataFrame(shap_values,
-                           columns=feature_names,
-                           index=index_names)
-
-    shap_df.to_csv(os.path.join(save_path, "shap.csv"), sep=";")
+    if len(classes) == 2:
+        shap_df = pd.DataFrame(shap_values,
+                               columns=feature_names,
+                               index=index_names)
+        shap_df.to_csv(os.path.join(save_path, "shap.csv"), sep=";")
+    else:
+        for i, label in enumerate(classes):
+            shap_df = pd.DataFrame(shap_values[i],
+                                   columns=feature_names,
+                                   index=index_names)
+            shap_df.to_csv(os.path.join(save_path, f"Label-{label}_shap-values.csv"), sep=";")
 
     shap.summary_plot(shap_values=shap_values,
                       features=x,

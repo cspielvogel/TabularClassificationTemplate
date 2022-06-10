@@ -16,6 +16,8 @@ Template for binary classifications of tabular data including preprocessing
 # TODO: Handle NA imputation for categorical values
 # TODO: Perform imputation for entire dataset
 # TODO: Show feature correlation matrix for entire and final (after mrmr) data set
+# TODO: Handle EDA visualizations (scaling!) for cases where there are categorical and/or missing values
+# TODO: Add confidence intervals to performance
 
 Input data format specifications:
     - As of now, a file path has to be supplied to the main function as string value for the variable "data_path";
@@ -46,6 +48,7 @@ from sklearn.model_selection import train_test_split, RandomizedSearchCV
 from sklearn.metrics import accuracy_score, confusion_matrix
 from sklearn.feature_selection import f_classif
 from sklearn.inspection import permutation_importance
+from sklearn.preprocessing import OneHotEncoder
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
 import shap
@@ -62,17 +65,17 @@ from explainability_tools import plot_importances, plot_shap_features, plot_part
 def main():
     # Set hyperparameters
     num_folds = 50
-    # label_name = "DPD_final"
+    label_name = "DPD_final"
     # label_name = "1"
     # label_name = "OS_histo36"
-    label_name = "Malign"
+    # label_name = "Malign"
     verbose = True
-    classifiers_to_run = ["ebm", "dt", "knn", "nn", "rf", "xgb"]
-    # classifiers_to_run = ["knn"]
+    # classifiers_to_run = ["ebm", "dt", "knn", "nn", "rf", "xgb"]
+    classifiers_to_run = ["ebm"]
 
     # Set output paths
     # output_path = r"C:\Users\cspielvogel\PycharmProjects\HNSCC"
-    output_path = r"./ParotisMRI"
+    output_path = r"./CardiacAmyloidosis"
     eda_result_path = os.path.join(output_path, r"Results/EDA/")
     explainability_result_path = os.path.join(output_path, r"Results/XAI/")
     model_result_path = os.path.join(output_path, r"Results/Models/")
@@ -83,7 +86,7 @@ def main():
     # data_path = "/home/cspielvogel/DataStorage/Bone_scintigraphy/Data/umap_feats_pg.csv"
     # data_path = r"Data/test_data.csv"
     # data_path = r"C:\Users\cspielvogel\Downloads\fdb_multiomics_w_labels_all.csv"
-    data_path = r"/media/cspielvogel/DataStorage/ParotisMRI/Data/parotis_mri_radiomics11may2022_malign.csv"
+    data_path = r"/media/cspielvogel/cspielvogel/ca-whole-heart-segmentation/anterior_unique_ml.csv"
 
     # Create save directories if they do not exist yet
     for path in [eda_result_path, explainability_result_path, model_result_path, performance_result_path,
@@ -93,6 +96,20 @@ def main():
 
     # Load data to table
     df = pd.read_csv(data_path, sep=";", index_col=0)
+
+    # Perform one hot encoding of categorical features before standard scaling in EDA visualizations
+    categorical_mask = df.dtypes == object
+    categorical_columns = df.columns[categorical_mask].tolist()
+
+    one_hot_encoder = OneHotEncoder(handle_unknown='ignore', sparse=False)
+    one_hot_encoder.fit(df[categorical_columns])
+    cat_ohe = one_hot_encoder.transform(
+        df[categorical_columns])  # Will be all zero if unknown category in transform
+    ohe_df = pd.DataFrame(cat_ohe,
+                          columns=one_hot_encoder.get_feature_names(input_features=categorical_columns),
+                          index=df.index)
+    df = pd.concat([df, ohe_df], axis="columns")
+    df.drop(columns=categorical_columns, axis="columns", inplace=True)
 
     # Perform EDA and save results
     run_eda(features=df.drop(label_name, axis="columns"),
@@ -367,51 +384,11 @@ def main():
 
             json.dump(param_dict_json_conform, file, indent=4)
 
-        # Partial dependenced plots (DPD)
-        plot_partial_dependences(model=optimized_model,
-                                 x=x_preprocessed,
-                                 y=y,
-                                 feature_names=feature_names_selected,
-                                 clf_name=clf,
-                                 save_path=explainability_result_path)
-
-        # SHAP analysis and plotting
-        plot_shap_features(model=optimized_model,
-                           x=x_preprocessed,
-                           num_classes=num_classes,
-                           feature_names=feature_names_selected,
-                           index_names=x_preprocessed_df.index,
-                           clf_name=clf,
-                           save_path=explainability_result_path,
-                           verbose=True)
-
         # Get mean of feature importance scores and standard deviation over all folds
         overall_mean_importances_train = raw_importances_foldwise_mean_train / num_folds
         overall_std_importances_train = raw_importances_foldwise_std_train / num_folds
         overall_mean_importances_val = raw_importances_foldwise_mean_val / num_folds
         overall_std_importances_val = raw_importances_foldwise_std_val / num_folds
-
-        # Plot feature importances as determined using training and validation data
-        plot_title_permutation_importance = f"permutation_importance_{clf}"
-        plot_importances(importances_mean=overall_mean_importances_train,
-                         importances_std=overall_std_importances_train,
-                         feature_names=feature_names_selected,
-                         plot_title=plot_title_permutation_importance + "-training_data",
-                         order_alphanumeric=True,
-                         include_top=0,
-                         display_plots=False,
-                         save_path=os.path.join(explainability_result_path,
-                                                plot_title_permutation_importance + "-train"))
-
-        plot_importances(importances_mean=overall_mean_importances_val,
-                         importances_std=overall_std_importances_val,
-                         feature_names=feature_names_selected,
-                         plot_title=plot_title_permutation_importance + "-validation_data",
-                         order_alphanumeric=True,
-                         include_top=0,
-                         display_plots=False,
-                         save_path=os.path.join(explainability_result_path,
-                                                plot_title_permutation_importance + "-test"))
 
         # Calculate overall performance
         for metric in performance_foldwise:
@@ -437,6 +414,45 @@ def main():
                              columns=[str(name) + " (actual)" for name in label_names],
                              index=[str(name) + " (predicted)" for name in label_names])
         cm_df.to_csv(os.path.join(performance_result_path, f"confusion_matrix-{clf}.csv"), sep=";")
+
+        # Plot feature importances as determined using training and validation data
+        plot_title_permutation_importance = f"permutation_importance_{clf}"
+        plot_importances(importances_mean=overall_mean_importances_train,
+                         importances_std=overall_std_importances_train,
+                         feature_names=feature_names_selected,
+                         plot_title=plot_title_permutation_importance + "-training_data",
+                         order_alphanumeric=True,
+                         include_top=0,
+                         display_plots=False,
+                         save_path=os.path.join(explainability_result_path,
+                                                plot_title_permutation_importance + "-train"))
+
+        plot_importances(importances_mean=overall_mean_importances_val,
+                         importances_std=overall_std_importances_val,
+                         feature_names=feature_names_selected,
+                         plot_title=plot_title_permutation_importance + "-validation_data",
+                         order_alphanumeric=True,
+                         include_top=0,
+                         display_plots=False,
+                         save_path=os.path.join(explainability_result_path,
+                                                plot_title_permutation_importance + "-test"))
+
+        # Partial dependenced plots (DPD)
+        plot_partial_dependences(model=optimized_model,
+                                 x=x_preprocessed,
+                                 y=y,
+                                 feature_names=feature_names_selected,
+                                 clf_name=clf,
+                                 save_path=explainability_result_path)
+
+        # SHAP analysis and plotting
+        plot_shap_features(model=optimized_model,
+                           x=x_preprocessed,
+                           feature_names=feature_names_selected,
+                           index_names=x_preprocessed_df.index,
+                           clf_name=clf,
+                           save_path=explainability_result_path,
+                           verbose=True)
 
     # Append performance to result table
     for metric in clfs_performance:

@@ -108,6 +108,10 @@ class TabularPreprocessor:
         # Fit one hot encoding for categorial features
         categorical_mask = data.dtypes == object
         self.categorical_columns = data.columns[categorical_mask].tolist()
+
+        # Cast all categorical columns to string to avoid TypeError
+        data = data.astype({k: str for k in self.categorical_columns})
+
         self.one_hot_encoder = OneHotEncoder(handle_unknown='ignore', sparse=False)  # TODO: check arguments
         self.one_hot_encoder.fit(data[self.categorical_columns])
 
@@ -125,6 +129,9 @@ class TabularPreprocessor:
 
         # Ensure pipeline instance has been fitted
         assert self.is_fit is True, ".fit() has to be called before transforming any data"
+
+        # Ensure categorical columns are strings
+        data = data.astype({k: str for k in self.categorical_columns})
 
         # Only keep first instance if multiple instances have the same key
         num_instances_before = len(data)

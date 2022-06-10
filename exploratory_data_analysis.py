@@ -212,7 +212,7 @@ def run_eda(features, labels, label_column, save_path, analyses_to_run=("pandas_
     if "umap" in analyses_to_run or "tsne" in analyses_to_run or "pca" in analyses_to_run:
 
         # Standardize and impute missing values
-        features_standardized = TabularIntraFoldPreprocessor(imputation_method="mice",
+        features_standardized = TabularIntraFoldPreprocessor(imputation_method="knn",
                                                              k="automated",
                                                              normalization="standardize").fit_transform(features)
 
