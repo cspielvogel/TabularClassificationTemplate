@@ -64,8 +64,8 @@ from explainability_tools import plot_importances, plot_shap_features, plot_part
 
 def main():
     # Set hyperparameters
-    num_folds = 50
-    label_name = "DPD_final"
+    num_folds = 1
+    label_name = "1"
     # label_name = "1"
     # label_name = "OS_histo36"
     # label_name = "Malign"
@@ -75,7 +75,7 @@ def main():
 
     # Set output paths
     # output_path = r"C:\Users\cspielvogel\PycharmProjects\HNSCC"
-    output_path = r"./CardiacAmyloidosis"
+    output_path = r"./Tmp"
     eda_result_path = os.path.join(output_path, r"Results/EDA/")
     explainability_result_path = os.path.join(output_path, r"Results/XAI/")
     model_result_path = os.path.join(output_path, r"Results/Models/")
@@ -86,7 +86,7 @@ def main():
     # data_path = "/home/cspielvogel/DataStorage/Bone_scintigraphy/Data/umap_feats_pg.csv"
     # data_path = r"Data/test_data.csv"
     # data_path = r"C:\Users\cspielvogel\Downloads\fdb_multiomics_w_labels_all.csv"
-    data_path = r"/media/cspielvogel/cspielvogel/ca-whole-heart-segmentation/anterior_unique_ml.csv"
+    data_path = r"C:\Users\cspielvogel\PycharmProjects\TabularClassificationTemplate\Data\test_data.csv"
 
     # Create save directories if they do not exist yet
     for path in [eda_result_path, explainability_result_path, model_result_path, performance_result_path,
@@ -209,7 +209,7 @@ def main():
                 {"classifier": xgb,
                  "parameters": xgb_param_grid}}
 
-    clfs_performance = {"acc": [], "sns": [], "spc": [], "auc": []}
+    clfs_performance = {"acc": [], "sns": [], "spc": [], "ppv": [], "npv": [], "bacc": [], "auc": []}
 
     # Get number of classes
     num_classes = len(np.unique(y))
@@ -230,7 +230,7 @@ def main():
 
         # Initialize cumulated confusion matrix and fold-wise performance containers
         cms = np.zeros((num_classes, num_classes))
-        performance_foldwise = {"acc": [], "sns": [], "spc": [], "auc": []}
+        performance_foldwise = {"acc": [], "sns": [], "spc": [], "ppv": [], "npv": [], "bacc": [], "auc": []}
 
         # Iterate over MCCV
         tqdm_bar = tqdm(np.arange(num_folds))
@@ -310,6 +310,9 @@ def main():
             acc = metrics.accuracy(y_test, y_pred)
             sns = metrics.sensitivity(y_test, y_pred)
             spc = metrics.specificity(y_test, y_pred)
+            ppv = metrics.positive_predictive_value(y_test, y_pred)
+            npv = metrics.negative_predictive_value(y_test, y_pred)
+            bacc = metrics.balanced_accuracy(y_test, y_pred)
             auc = metrics.roc_auc(y_test, y_pred)
 
             # Append performance to fold-wise and overall containers
@@ -317,6 +320,9 @@ def main():
             performance_foldwise["acc"].append(acc)
             performance_foldwise["sns"].append(sns)
             performance_foldwise["spc"].append(spc)
+            performance_foldwise["ppv"].append(ppv)
+            performance_foldwise["npv"].append(npv)
+            performance_foldwise["bacc"].append(bacc)
             performance_foldwise["auc"].append(auc)
 
             # Progressbar
@@ -459,7 +465,7 @@ def main():
         results[metric] = clfs_performance[metric]
 
     # Save result table
-    colors = ["dimgray", "gray", "darkgray", "maroon", "lightgray", "gainsboro"]
+    colors = ["dimgray", "gray", "darkgray", "lightgray", "gainsboro", "whitesmoke", "maroon"]
     results.to_csv(os.path.join(performance_result_path, "performances.csv"), sep=";")
     results.plot.bar(rot=45, color=colors).legend(loc="upper right")
 
