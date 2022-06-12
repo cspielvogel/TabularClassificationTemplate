@@ -18,6 +18,7 @@ Template for binary classifications of tabular data including preprocessing
 # TODO: Show feature correlation matrix for entire and final (after mrmr) data set
 # TODO: Handle EDA visualizations (scaling!) for cases where there are categorical and/or missing values
 # TODO: Add confidence intervals to performance
+# TODO: Add confidence intervals and p values to performance bar plot (Requires reuse of same fold for all classifiers)
 
 Input data format specifications:
     - As of now, a file path has to be supplied to the main function as string value for the variable "data_path";
@@ -339,9 +340,9 @@ def main():
         intra_fold_preprocessor = TabularIntraFoldPreprocessor(k="automated",
                                                                normalization="standardize",
                                                                imputer_path=os.path.join(intermediate_data_path,
-                                                                                      f"{clf}_scaler.pickle"),
+                                                                                         f"{clf}_scaler.pickle"),
                                                                scaler_path=os.path.join(intermediate_data_path,
-                                                                                      f"{clf}_imputer.pickle"))
+                                                                                        f"{clf}_imputer.pickle"))
         x_preprocessed = intra_fold_preprocessor.fit_transform(x)
 
         # Save preprocessed data
