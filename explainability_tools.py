@@ -113,7 +113,7 @@ def plot_shap_features(model, x, feature_names, index_names, clf_name, save_path
         shap_df = pd.DataFrame(shap_values,
                                columns=feature_names,
                                index=index_names)
-        shap_df.to_csv(os.path.join(save_path, "shap.csv"), sep=";")
+        shap_df.to_csv(os.path.join(save_path, f"shap-values_{clf_name}.csv"), sep=";")
     else:
         for i, label in enumerate(classes):
             shap_df = pd.DataFrame(shap_values[i],

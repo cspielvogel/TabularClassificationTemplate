@@ -75,7 +75,7 @@ def main():
 
     # Set output paths
     # output_path = r"C:\Users\cspielvogel\PycharmProjects\HNSCC"
-    output_path = r"./CardiacAmyloidosis"
+    output_path = r"./CardiacAmyloidosis_umap-clin"
     eda_result_path = os.path.join(output_path, r"Results/EDA/")
     explainability_result_path = os.path.join(output_path, r"Results/XAI/")
     model_result_path = os.path.join(output_path, r"Results/Models/")
@@ -86,7 +86,7 @@ def main():
     # data_path = "/home/cspielvogel/DataStorage/Bone_scintigraphy/Data/umap_feats_pg.csv"
     # data_path = r"Data/test_data.csv"
     # data_path = r"C:\Users\cspielvogel\Downloads\fdb_multiomics_w_labels_all.csv"
-    data_path = r"/media/cspielvogel/cspielvogel/ca-whole-heart-segmentation/anterior_unique_ml.csv"
+    data_path = r"/media/cspielvogel/DataStorage/Bone_scintigraphy/Data/anterior_unique_ml_with-umap.csv"
 
     # Create save directories if they do not exist yet
     for path in [eda_result_path, explainability_result_path, model_result_path, performance_result_path,
@@ -121,12 +121,14 @@ def main():
     # Perform standardized preprocessing
     preprocessor = TabularPreprocessor(label_name=label_name,
                                        one_hot_encoder_path=os.path.join(intermediate_data_path,
-                                                                         f"one_hot_encoder.pickle"))
+                                                                         f"one_hot_encoder.pickle"),
+                                       max_missing_ratio=0.5)   # TODO: set to 0.2
     df = preprocessor.fit_transform(df)
 
     # Separate data into training and test
-    y = df[label_name]
-    # y = (df[label_name] < 2) * 1    # TODO: remove; only for PG classification
+    # y = df[label_name]
+    y = (df[label_name] < 2) * 1    # TODO: remove; only for PG classification
+
     x = df.drop(label_name, axis="columns")
 
     feature_names = x.columns
