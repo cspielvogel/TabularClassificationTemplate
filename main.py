@@ -466,7 +466,7 @@ def main():
         results[metric] = clfs_performance[metric]
 
     # Save result table
-    colors = ["dimgray", "gray", "darkgray", "lightgray", "gainsboro", "whitesmoke", "maroon"]
+    colors = ["dimgray", "gray", "darkgray", "silver", "lightslategray", "slategray", "maroon"]
     results.to_csv(os.path.join(performance_result_path, "performances.csv"), sep=";")
     results.plot.bar(rot=45, color=colors).legend(loc="upper right")
 
