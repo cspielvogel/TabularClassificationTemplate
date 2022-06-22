@@ -18,6 +18,8 @@ Template for binary classifications of tabular data including preprocessing
 # TODO: Show feature correlation matrix for entire and final (after mrmr) data set
 # TODO: Handle EDA visualizations (scaling!) for cases where there are categorical and/or missing values
 # TODO: Add confidence intervals and p values to performance bar plot (Requires reuse of same fold for all classifiers)
+# TODO: Save MCCV folds after creation and load for next classifier training
+# TODO: Provide option to load custom folds
 
 Input data format specifications:
     - As of now, a file path has to be supplied to the main function as string value for the variable "data_path";
