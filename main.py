@@ -20,6 +20,9 @@ Template for binary classifications of tabular data including preprocessing
 # TODO: Add confidence intervals and p values to performance bar plot (Requires reuse of same fold for all classifiers)
 # TODO: Save MCCV folds after creation and load for next classifier training
 # TODO: Provide option to load custom folds
+# TODO: Runtime optimization by parallelizing folds
+# TODO: Replace PDP plots with https://github.com/SauceCat/PDPbox
+# TODO: Optional: Add EBM interpretability plots to XAI
 
 Input data format specifications:
     - As of now, a file path has to be supplied to the main function as string value for the variable "data_path";
