@@ -81,6 +81,9 @@ Results/
         ├── ... (other models permutation importances for train and test set)
         ├── label-0_shap-values.csv
         ├── ... (other labels shap values if multiclass)
+        ├── dt_surrogate_model_for_opaque_model.pickle
+        ├── ebm_surrogate_model_for_opaque_model.pickle 
+        ├── dt_surrogate_model_for_opaque_model.svg 
         ├── shap_summary-ebm.png
         └── ... (other models shap summary plots)
 ```
