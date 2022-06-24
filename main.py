@@ -18,6 +18,15 @@ Template for binary classifications of tabular data including preprocessing
 # TODO: Show feature correlation matrix for entire and final (after mrmr) data set
 # TODO: Handle EDA visualizations (scaling!) for cases where there are categorical and/or missing values
 # TODO: Add confidence intervals and p values to performance bar plot (Requires reuse of same fold for all classifiers)
+# TODO: Save MCCV folds after creation and load for next classifier training
+# TODO: Provide option to load custom folds
+# TODO: Runtime optimization by parallelizing folds
+# TODO: Replace PDP plots with https://github.com/SauceCat/PDPbox
+# TODO: Optional: Add EBM interpretability plots to XAI
+# TODO: Add EBM surrogate interpretability plots to XAI
+# TODO: Encode labels as integers if they are provided as string
+# TODO: Create subdirectories for XAI results
+
 
 Input data format specifications:
     - As of now, a file path has to be supplied to the main function as string value for the variable "data_path";
@@ -54,12 +63,13 @@ from imblearn.under_sampling import RandomUnderSampler
 import shap
 from xgboost import XGBClassifier
 from interpret.glassbox import ExplainableBoostingClassifier
+from dtreeviz.trees import dtreeviz
 
 from exploratory_data_analysis import run_eda
 import metrics
 from preprocessing import TabularPreprocessor, TabularIntraFoldPreprocessor
 from feature_selection import univariate_feature_selection, mrmr_feature_selection
-from explainability_tools import plot_importances, plot_shap_features, plot_partial_dependences
+from explainability_tools import plot_importances, plot_shap_features, plot_partial_dependences, surrogate_model
 
 
 def main():
@@ -71,7 +81,7 @@ def main():
     # label_name = "Malign"
     verbose = True
     # classifiers_to_run = ["ebm", "dt", "knn", "nn", "rf", "xgb"]
-    classifiers_to_run = ["ebm"]
+    classifiers_to_run = ["ebm", "dt"]
 
     # Set output paths
     # output_path = r"C:\Users\cspielvogel\PycharmProjects\HNSCC"
@@ -450,6 +460,35 @@ def main():
                                  feature_names=feature_names_selected,
                                  clf_name=clf,
                                  save_path=explainability_result_path)
+
+        # Create surrogate models
+        if clf not in ["dt", "ebm"]:
+            dt_surrogate_params = {     # TODO: allow customization
+                "max_depth": 3,
+                "min_samples_leaf": 3
+            }
+            dt_surrogate_model, _ = surrogate_model(opaque_model=optimized_model,
+                                                    features=x_preprocessed,
+                                                    params=dt_surrogate_params,
+                                                    surrogate_type="dt",
+                                                    save_path=os.path.join(explainability_result_path,
+                                                                           f"dt_surrogate_model_for-{clf}.pickle"),
+                                                    verbose=True)
+            ebm_surrogate_params = {}
+            ebm_surrogate_model, _ = surrogate_model(opaque_model=optimized_model,
+                                                     features=x_preprocessed,
+                                                     params=ebm_surrogate_params,
+                                                     surrogate_type="ebm",
+                                                     save_path=os.path.join(explainability_result_path,
+                                                                f"ebm_surrogate_model_for-{clf}.pickle"),
+                                                     verbose=True)
+
+        # Create and save surrogate tree visualization
+        viz = dtreeviz(dt_surrogate_model, x_preprocessed, y,
+                       target_name="Label",
+                       feature_names=feature_names_selected,
+                       class_names=[str(label) for label in dt_surrogate_model.classes_])
+        viz.save(os.path.join(explainability_result_path, "dt_surrogate_model.svg"))
 
         # SHAP analysis and plotting
         plot_shap_features(model=optimized_model,

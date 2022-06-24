@@ -20,7 +20,11 @@ TODO:
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.inspection import permutation_importance, PartialDependenceDisplay
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, make_scorer, mean_squared_error, mean_absolute_error
+from sklearn.model_selection import cross_validate
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.linear_model import LinearRegression, Lasso, Ridge
+from interpret.glassbox import ExplainableBoostingClassifier
 import shap
 
 from matplotlib import pyplot as plt
@@ -29,6 +33,9 @@ import pandas as pd
 import numpy as np
 
 import os
+import pickle
+
+import metrics
 
 
 def plot_partial_dependences(model, x, y, feature_names, clf_name, save_path):
@@ -208,6 +215,92 @@ def plot_importances(importances_mean, importances_std, feature_names, plot_titl
         importance_df.to_csv(save_path, sep=";")
 
     return importance_df
+
+
+def surrogate_model(opaque_model, features, params, surrogate_type="dt", save_path=None, verbose=True):
+    """
+    Create surrogate model approximating opaque model
+
+    :param opaque_model: Object such as sklearn.base.BaseEstimator implementing predict and predict_proba function
+    :param features: pandas.DataFrame containing the feature values for inference using the opaque model
+    :param params: Dict containing the parameters for the surrogate model; Default parameters will be used if empty
+    :param surrogate_type: String indicating the surrogate model; supported are "dt" for decision tree classifier,
+                           "ebm" for explainable boosting machine, "lr" for linear regression, "ridge" for ridge
+                           regression and "lasso" for lasso regression
+    :param save_path: String indicating the directory path where
+    :param verbose: Bool indicating whether to print additional details
+    :return: tuple containing the surrogate model objects as numpy.ndarray and the surrogate performance metrics
+             as pandas.core.series.Series
+    """
+
+    if verbose is True:
+        # Display status output
+        print(f"[XAI] Creating {surrogate_type} surrogate model")
+
+    # Perform inference using opaque model and provided data
+    opaque_pred = opaque_model.predict(features)
+
+    # Initialize surrogate classifier(s)
+    if surrogate_type == "dt":
+        interpretable_model = DecisionTreeClassifier(**params)
+    elif surrogate_type == "ebm":
+        interpretable_model = ExplainableBoostingClassifier(**params)
+    elif surrogate_type == "lr":
+        interpretable_model = LinearRegression(**params)
+    elif surrogate_type == "lasso":
+        interpretable_model = Lasso(**params)
+    elif surrogate_type == "ridge":
+        interpretable_model = Ridge(**params)
+    else:
+        print("[Warning] Surrogate model must be one of 'dt', 'ebm', 'lr', 'lasso' and 'ridge'.")
+
+    # Define metrics for cross validation in case of classification surrogate
+    if surrogate_type in ["dt", "ebm"]:
+        scoring = {
+            'acc': make_scorer(metrics.accuracy),
+            'sns': make_scorer(metrics.sensitivity),
+            'spc': make_scorer(metrics.specificity),
+            'ppv': make_scorer(metrics.positive_predictive_value),
+            'npv': make_scorer(metrics.negative_predictive_value),
+            'bacc': make_scorer(metrics.balanced_accuracy),
+            'auc': make_scorer(metrics.roc_auc)
+        }
+
+    elif surrogate_type in ["lr", "ridge", "lasso"]:
+        scoring = {
+            'mse': make_scorer(mean_squared_error),
+            'mae': make_scorer(mean_absolute_error),
+        }
+
+    # Perform k-fold cross-validation for performance evaluation
+    scores = cross_validate(interpretable_model,
+                            features,
+                            opaque_pred,
+                            scoring=scoring,
+                            cv=10,
+                            return_train_score=False)
+
+    # Compute average scores over all folds
+    test_metrics_mask = ["test_" + metric_name for metric_name in scoring.keys()]
+    mean_scores = pd.DataFrame(scores).mean()[test_metrics_mask].to_frame().T
+    mean_scores.index = ["performance"]
+
+    # Train surrogate classifier on entire data
+    interpretable_model.fit(features, opaque_pred)
+
+    if verbose is True:
+        # Display performance
+        print(f"[XAI] {surrogate_type} surrogate model performance")
+        print(mean_scores.round(2))
+
+    if save_path is not None:
+        # Save surrogate model to file
+        with open(os.path.join(save_path), "wb") as file:
+            pickle.dump(interpretable_model, file)
+
+        mean_scores.to_csv(save_path.rstrip(".pickle") + "-performances.csv", sep=";")
+
+    return interpretable_model, mean_scores
 
 
 def main():
