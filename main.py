@@ -41,7 +41,7 @@ import os
 import pickle
 import json
 import multiprocessing
-from joblib import parallel_backend
+# from joblib import parallel_backend
 
 import numpy as np
 import pandas as pd
@@ -483,12 +483,12 @@ def main():
                                                                 f"ebm_surrogate_model_for-{clf}.pickle"),
                                                      verbose=True)
 
-        # Create and save surrogate tree visualization
-        viz = dtreeviz(dt_surrogate_model, x_preprocessed, y,
-                       target_name="Label",
-                       feature_names=feature_names_selected,
-                       class_names=[str(label) for label in dt_surrogate_model.classes_])
-        viz.save(os.path.join(explainability_result_path, "dt_surrogate_model.svg"))
+            # Create and save surrogate tree visualization
+            viz = dtreeviz(dt_surrogate_model, x_preprocessed, y,
+                           target_name="Label",
+                           feature_names=feature_names_selected,
+                           class_names=[str(label) for label in dt_surrogate_model.classes_])
+            viz.save(os.path.join(explainability_result_path, "dt_surrogate_model.svg"))
 
         # SHAP analysis and plotting
         plot_shap_features(model=optimized_model,
@@ -525,8 +525,8 @@ def main():
 
 
 if __name__ == "__main__":
-    cpu_count = multiprocessing.cpu_count()
-    allocated_threads = cpu_count - 2
-
-    with parallel_backend("threading", n_jobs=allocated_threads):
-        main()
+    # cpu_count = multiprocessing.cpu_count()
+    # allocated_threads = cpu_count - 2
+    #
+    # with parallel_backend("threading", n_jobs=allocated_threads):
+    main()
