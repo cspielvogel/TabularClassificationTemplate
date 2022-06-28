@@ -89,7 +89,7 @@ Results/
 ```
 
 ## Installation
-Clone this repository, navigate to the corresponding directory and install the supplied `requirements.txt`. The project was built using `python 3.9.4`.
+Clone this repository, navigate to the corresponding directory and install the supplied `requirements.txt`. The project was built using `python 3.9.5`.
 ```
 pip install -r requirements.txt
 ```
