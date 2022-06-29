@@ -26,6 +26,7 @@ Template for binary classifications of tabular data including preprocessing
 # TODO: Add EBM surrogate interpretability plots to XAI
 # TODO: Encode labels as integers if they are provided as string
 # TODO: Create subdirectories for XAI results
+# TODO: Correct saving of tuples in JSON error when saving layer hyperparameters during optimization
 
 
 Input data format specifications:
