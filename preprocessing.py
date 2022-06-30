@@ -25,6 +25,7 @@ Content:
 import warnings
 import numbers
 import pickle
+import os
 
 import numpy as np
 import pandas as pd
@@ -35,7 +36,7 @@ from sklearn.impute import KNNImputer
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer
 from sklearn.linear_model import LinearRegression
-from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import OneHotEncoder, LabelEncoder
 
 # Ignore SettingWithCopyWarning resulting from creating pandas.DataFrames from numpy.ndarrays
 warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
@@ -47,12 +48,13 @@ class TabularPreprocessor:
     applied
     """
 
-    def __init__(self, label_name, max_missing_ratio=0.2, one_hot_encoder_path=None):
+    def __init__(self, label_name, max_missing_ratio=0.2, one_hot_encoder_path=None, label_encoder_path=None):
         """
         Constructor
         :param label_name: str indicating column name containing label
         :param max_missing_ratio: float indicating the maximum ratio of missing to all feature values to keep a feature
-        :param one_hot_encoder_path: str indicating the file path on which to save one hot encoder, Not saved if None
+        :param one_hot_encoder_path: str indicating the file path to save one hot encoder, Not saved if None
+        :param label_encoder_path: str indicating the file path to save label encoder; Not saved if None
         :return: None
         """
 
@@ -64,8 +66,10 @@ class TabularPreprocessor:
         # Set attributes
         self.max_missing_ratio = max_missing_ratio
         self.one_hot_encoder_path = one_hot_encoder_path
+        self.label_encoder_path = label_encoder_path
         self.label_name = label_name
         self.one_hot_encoder = None
+        self.label_encoder = None
         self.categorical_columns = None
         self.is_fit = False
 
@@ -109,6 +113,10 @@ class TabularPreprocessor:
         categorical_mask = data.dtypes == object
         self.categorical_columns = data.columns[categorical_mask].tolist()
 
+        # Omit label if categorical
+        if self.label_name in self.categorical_columns:
+            self.categorical_columns.remove(self.label_name)
+
         # Cast all categorical columns to string to avoid TypeError
         data = data.astype({k: str for k in self.categorical_columns})
 
@@ -130,6 +138,10 @@ class TabularPreprocessor:
         # Ensure pipeline instance has been fitted
         assert self.is_fit is True, ".fit() has to be called before transforming any data"
 
+        # Remove instances with missing label
+        num_label_nans = data[self.label_name].isnull().sum()
+        data.dropna(subset=[self.label_name], inplace=True)
+
         # Ensure categorical columns are strings
         data = data.astype({k: str for k in self.categorical_columns})
 
@@ -140,10 +152,6 @@ class TabularPreprocessor:
         if num_instances_diff > 0:
             print(f"[Warning] {num_instances_diff} instance(s) removed due to duplicate keys"
                   f"- only keeping first occurrence!")
-
-        # Remove instances with missing label
-        num_label_nans = data[self.label_name].isnull().sum()
-        data.dropna(subset=[self.label_name], inplace=True)
 
         if num_label_nans > 0:
             print(f"[Warning] {num_label_nans} sample(s) removed due to missing label!")
@@ -164,6 +172,15 @@ class TabularPreprocessor:
                 if np.all(np.array([i for i in data[column] if not i in ['nan', np.nan]]) ==
                           data[column].values[0]):
                     data = data.drop(column, axis="columns")
+
+        # Encode labels as integers
+        if data[self.label_name].dtypes == object:
+            self.label_encoder = LabelEncoder()
+            data[self.label_name] = self.label_encoder.fit_transform(data[self.label_name])
+
+            # Save label encoder to pickle file
+            with open(self.label_encoder_path, "wb") as file:
+                pickle.dump(self.label_encoder, file)
 
         # Check whether there are any categorical columns
         if len(self.categorical_columns) != 0:

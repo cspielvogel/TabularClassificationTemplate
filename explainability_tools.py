@@ -86,15 +86,16 @@ def plot_partial_dependences(model, x, y, feature_names, clf_name, save_path):
             plt.close()
 
 
-def plot_shap_features(model, x, feature_names, index_names, clf_name, save_path, verbose=True):
+def plot_shap_features(model, x, feature_names, index_names, clf_name, classes, save_path, verbose=True):
     """
     Compute SHAP values, save to file and create summary plots
 
     :param model: sklearn.base.BaseEstimator or derivative containing a trained model
     :param x: numpy.ndarray containing the feature values
-    :param feature_names: numpy.ndarray 1D or a list containing the feature names as strings
-    :param index_names: numpy.ndarray 1D or a list containing the sample names
+    :param feature_names: numpy.ndarray 1D or list containing the feature names as strings
+    :param index_names: numpy.ndarray 1D or list containing the sample names
     :param clf_name: str indicating the classifiers name
+    :param classes: numpy.ndarray 1D or list containing the unique classes (ordered as stored in the model attribute)
     :param save_path: str indicating the directory path where the outputs shall be saved
     :param verbose: bool indicating whether commandline output shall be displayed
     :return: pandas.DataFrame containing the SHAP values
@@ -105,7 +106,6 @@ def plot_shap_features(model, x, feature_names, index_names, clf_name, save_path
         print("[XAI] Computing SHAP importances")
 
     # Ensure plotting summary as bar for multiclass and beeswarm for binary classification
-    classes = model.best_estimator_.classes_
     if len(classes) > 2:
         predictor = model.best_estimator_.predict_proba
     else:
@@ -131,7 +131,7 @@ def plot_shap_features(model, x, feature_names, index_names, clf_name, save_path
     shap.summary_plot(shap_values=shap_values,
                       features=x,
                       feature_names=feature_names,
-                      class_names=model.best_estimator_.classes_,
+                      class_names=classes,
                       show=False)
     plt.subplots_adjust(bottom=0.15)
     plt.savefig(os.path.join(save_path, f"shap_summary-{clf_name}.png"),

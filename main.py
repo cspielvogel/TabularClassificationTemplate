@@ -12,6 +12,7 @@ Template for binary classifications of tabular data including preprocessing
 # TODO: Add surrogate models (maybe in a second line analysis script)
 # TODO: Add LCE? https://towardsdatascience.com/random-forest-or-xgboost-it-is-time-to-explore-lce-2fed913eafb8
 # TODO: Validate functionality of pickled files after loading
+# TODO: Silence dtreeviz "findfont" warning
 # TODO: SHAP speedup (shap.sample(data, K) or shap.kmeans(data, K) to summarize the background as K samples)
 # TODO: Handle NA imputation for categorical values
 # TODO: Perform imputation for entire dataset
@@ -21,10 +22,10 @@ Template for binary classifications of tabular data including preprocessing
 # TODO: Save MCCV folds after creation and load for next classifier training
 # TODO: Provide option to load custom folds
 # TODO: Runtime optimization by parallelizing folds
+# TODO: Add quickload function to load all intermediate data and models for custom analysis
 # TODO: Replace PDP plots with https://github.com/SauceCat/PDPbox
 # TODO: Optional: Add EBM interpretability plots to XAI
 # TODO: Add EBM surrogate interpretability plots to XAI
-# TODO: Encode labels as integers if they are provided as string
 
 Input data format specifications:
     - As of now, a file path has to be supplied to the main function as string value for the variable "data_path";
@@ -53,7 +54,7 @@ from sklearn.model_selection import train_test_split, RandomizedSearchCV
 from sklearn.metrics import accuracy_score, confusion_matrix
 from sklearn.feature_selection import f_classif
 from sklearn.inspection import permutation_importance
-from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import OneHotEncoder, LabelEncoder
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
 import shap
@@ -81,14 +82,14 @@ def create_path_if_not_exist(path):
 
 def main():
     # Set hyperparameters
-    num_folds = 3
-    label_name = "1"
+    num_folds = 1
+    label_name = "Label"
     # label_name = "1"
     # label_name = "OS_histo36"
     # label_name = "Malign"
     verbose = True
     # classifiers_to_run = ["ebm", "dt", "knn", "nn", "rf", "xgb"]
-    classifiers_to_run = ["ebm", "rf"]
+    classifiers_to_run = ["rf"]
 
     # Set output paths
     # output_path = r"C:\Users\cspielvogel\PycharmProjects\HNSCC"
@@ -113,32 +114,47 @@ def main():
     # Load data to table
     df = pd.read_csv(data_path, sep=";", index_col=0)
 
-    # Perform one hot encoding of categorical features before standard scaling in EDA visualizations
-    categorical_mask = df.dtypes == object
-    categorical_columns = df.columns[categorical_mask].tolist()
-
-    one_hot_encoder = OneHotEncoder(handle_unknown='ignore', sparse=False)
-    one_hot_encoder.fit(df[categorical_columns])
-    cat_ohe = one_hot_encoder.transform(
-        df[categorical_columns])  # Will be all zero if unknown category in transform
-    ohe_df = pd.DataFrame(cat_ohe,
-                          columns=one_hot_encoder.get_feature_names(input_features=categorical_columns),
-                          index=df.index)
-    df = pd.concat([df, ohe_df], axis="columns")
-    df.drop(columns=categorical_columns, axis="columns", inplace=True)
-
     # # Perform EDA and save results
     # run_eda(features=df.drop(label_name, axis="columns"),
     #         labels=df[label_name],
     #         label_column=label_name,
     #         save_path=eda_result_path,
+    #         analyses_to_run=["pandas_profiling"],
     #         verbose=verbose)
+
+    # Perform one hot encoding of categorical features before standard scaling in EDA visualizations
+    categorical_mask = df.dtypes == object
+    categorical_columns = df.columns[categorical_mask].tolist()
+
+    # # Omit label if categorical
+    # if label_name in categorical_columns:
+    #     categorical_columns.remove(label_name)
+    #
+    # one_hot_encoder = OneHotEncoder(handle_unknown="ignore", sparse=False)
+    # one_hot_encoder.fit(df[categorical_columns])
+    # cat_ohe = one_hot_encoder.transform(
+    #     df[categorical_columns])  # Will be all zero if unknown category in transform
+    # ohe_df = pd.DataFrame(cat_ohe,
+    #                       columns=one_hot_encoder.get_feature_names(input_features=categorical_columns),
+    #                       index=df.index)
+    # df = pd.concat([df, ohe_df], axis="columns")
+    # df.drop(columns=categorical_columns, axis="columns", inplace=True)
 
     # Perform standardized preprocessing
     preprocessor = TabularPreprocessor(label_name=label_name,
                                        one_hot_encoder_path=os.path.join(intermediate_data_path,
-                                                                         f"one_hot_encoder.pickle"))
+                                                                         f"one_hot_encoder.pickle"),
+                                       label_encoder_path=os.path.join(intermediate_data_path,
+                                                                       "label_encoder.pickle"))
     df = preprocessor.fit_transform(df)
+
+    # Perform dimensionality reductions
+    run_eda(features=df.drop(label_name, axis="columns"),
+            labels=df[label_name],
+            label_column=label_name,
+            save_path=eda_result_path,
+            analyses_to_run=["umap", "tsne", "pca"],
+            verbose=verbose)
 
     # Separate data into training and test
     y = df[label_name]
@@ -508,22 +524,27 @@ def main():
 
             # Create and save surrogate tree visualization
             dt_surrogate_model_visualization_save_path = os.path.join(surrogate_models_save_path,
-                                                                      "dt_surrogate_model.svg")
+                                                                      f"dt_surrogate_model_for-{clf}.svg")
+            int_label_names = [label for label in dt_surrogate_model.classes_]
+            decoded_class_names = list(preprocessor.label_encoder.inverse_transform(int_label_names))
+
             viz = dtreeviz(dt_surrogate_model, x_preprocessed, y,
                            target_name="Label",
                            feature_names=feature_names_selected,
-                           class_names=[str(label) for label in dt_surrogate_model.classes_])
+                           class_names=decoded_class_names)
             viz.save(dt_surrogate_model_visualization_save_path)
 
         # SHAP analysis and plotting
         shap_save_path = os.path.join(explainability_result_path, "SHAP")
         create_path_if_not_exist(shap_save_path)
+        decoded_class_names = list(preprocessor.label_encoder.inverse_transform(optimized_model.best_estimator_.classes_))
 
         plot_shap_features(model=optimized_model,
                            x=x_preprocessed,
                            feature_names=feature_names_selected,
                            index_names=x_preprocessed_df.index,
                            clf_name=clf,
+                           classes=decoded_class_names,
                            save_path=shap_save_path,
                            verbose=True)
 
