@@ -75,14 +75,14 @@ from explainability_tools import plot_importances, plot_shap_features, plot_part
 
 def main():
     # Set hyperparameters
-    num_folds = 1
+    num_folds = 3
     label_name = "1"
     # label_name = "1"
     # label_name = "OS_histo36"
     # label_name = "Malign"
     verbose = True
     # classifiers_to_run = ["ebm", "dt", "knn", "nn", "rf", "xgb"]
-    classifiers_to_run = ["ebm", "dt", "knn"]
+    classifiers_to_run = ["nn"]
 
     # Set output paths
     # output_path = r"C:\Users\cspielvogel\PycharmProjects\HNSCC"
@@ -122,12 +122,12 @@ def main():
     df = pd.concat([df, ohe_df], axis="columns")
     df.drop(columns=categorical_columns, axis="columns", inplace=True)
 
-    # Perform EDA and save results
-    run_eda(features=df.drop(label_name, axis="columns"),
-            labels=df[label_name],
-            label_column=label_name,
-            save_path=eda_result_path,
-            verbose=verbose)
+    # # Perform EDA and save results
+    # run_eda(features=df.drop(label_name, axis="columns"),
+    #         labels=df[label_name],
+    #         label_column=label_name,
+    #         save_path=eda_result_path,
+    #         verbose=verbose)
 
     # Perform standardized preprocessing
     preprocessor = TabularPreprocessor(label_name=label_name,
@@ -175,14 +175,16 @@ def main():
     dt_param_grid = {}
 
     nn = MLPClassifier()
-    nn_param_grid = {"hidden_layer_sizes": [(32, 64, 32)],
-                     "early_stopping": [True],
-                     "n_iter_no_change": [20],
-                     "max_iter": [1000],
-                     "activation": ["relu", "tanh", "logistic"],
-                     "solver": ["adam"],
-                     "learning_rate_init": [0.01, 0.001, 0.0001]}
-    nn_param_grid = {}
+    # nn_param_grid = {"hidden_layer_sizes": [(32, 64, 32)],
+    #                  "early_stopping": [True],
+    #                  "n_iter_no_change": [20],
+    #                  "max_iter": [1000],
+    #                  "activation": ["relu", "tanh", "logistic"],
+    #                  "solver": ["adam"],
+    #                  "learning_rate_init": [0.01, 0.001, 0.0001]}
+    # nn_param_grid = {}
+    nn_param_grid = {"hidden_layer_sizes": [(2, 1), (10, 1)],
+                     "solver": ["adam"]}
 
     rf = RandomForestClassifier()
     rf_param_grid = {"criterion": ["entropy"],
@@ -397,6 +399,8 @@ def main():
                 try:
                     param_dict_json_conform[key] = float(optimized_model.best_params_[key])
                 except ValueError:
+                    param_dict_json_conform[key] = optimized_model.best_params_[key]
+                except TypeError:
                     param_dict_json_conform[key] = optimized_model.best_params_[key]
 
             json.dump(param_dict_json_conform, file, indent=4)
