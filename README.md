@@ -60,7 +60,7 @@ Results/
     ├── EDA
     |   ├── exploratory_data_analysis.html
     |   └── umap.html
-    ├── Intermediate_Data
+    ├── Intermediate_data
     |   ├── preprocessed_features.csv
     |   └── preprocessed_labels.csv
     ├── Models
@@ -74,18 +74,22 @@ Results/
     |   ├── performance.png
     |   └── performances.csv
     └── XAI
-        ├── partial_dependence-ebm_feature-1_class-A.png
-        ├── ... (PDPs of other features, models and classes)
-        ├── permutation_importance_ebm-test.png
-        ├── permutation_importance_ebm-train.png
-        ├── ... (other models permutation importances for train and test set)
-        ├── label-0_shap-values.csv
-        ├── ... (other labels shap values if multiclass)
-        ├── dt_surrogate_model_for_opaque_model.pickle
-        ├── ebm_surrogate_model_for_opaque_model.pickle 
-        ├── dt_surrogate_model_for_opaque_model.svg 
-        ├── shap_summary-ebm.png
-        └── ... (other models shap summary plots)
+        ├── Partial_dependence_plots
+        |   ├── partial_dependence-ebm_feature-1_class-A.png
+        |   └── ... (PDPs of other features, models and classes)
+        ├── Permutation_importances   
+        |   ├── permutation_importance_ebm-test.png
+        |   ├── permutation_importance_ebm-train.png
+        |   ├── ... (other models permutation importances for train and test set)
+        ├── Surrogate_models
+        |   ├── dt_surrogate_model_for_opaque_model.pickle
+        |   ├── ebm_surrogate_model_for_opaque_model.pickle 
+        |   ├── dt_surrogate_model_for_opaque_model.svg 
+        ├── SHAP
+        |   ├── label-0_shap-values.csv
+        |   ├── ... (other labels shap values if multiclass)
+        |   ├── shap_summary-ebm.png
+        |   └── ... (other models shap summary plots)
 ```
 
 ## Installation

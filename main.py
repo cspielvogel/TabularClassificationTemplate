@@ -25,9 +25,6 @@ Template for binary classifications of tabular data including preprocessing
 # TODO: Optional: Add EBM interpretability plots to XAI
 # TODO: Add EBM surrogate interpretability plots to XAI
 # TODO: Encode labels as integers if they are provided as string
-# TODO: Create subdirectories for XAI results
-# TODO: Correct saving of tuples in JSON error when saving layer hyperparameters during optimization
-
 
 Input data format specifications:
     - As of now, a file path has to be supplied to the main function as string value for the variable "data_path";
@@ -41,8 +38,6 @@ Input data format specifications:
 import os
 import pickle
 import json
-import multiprocessing
-# from joblib import parallel_backend
 
 import numpy as np
 import pandas as pd
@@ -73,6 +68,17 @@ from feature_selection import univariate_feature_selection, mrmr_feature_selecti
 from explainability_tools import plot_importances, plot_shap_features, plot_partial_dependences, surrogate_model
 
 
+def create_path_if_not_exist(path):
+    """
+    Create provided path if path does not exist yet
+
+    :param path: String indicating path to check
+    :return: None
+    """
+    if not os.path.exists(path):
+        os.makedirs(path)
+
+
 def main():
     # Set hyperparameters
     num_folds = 3
@@ -82,7 +88,7 @@ def main():
     # label_name = "Malign"
     verbose = True
     # classifiers_to_run = ["ebm", "dt", "knn", "nn", "rf", "xgb"]
-    classifiers_to_run = ["nn"]
+    classifiers_to_run = ["ebm", "rf"]
 
     # Set output paths
     # output_path = r"C:\Users\cspielvogel\PycharmProjects\HNSCC"
@@ -91,7 +97,7 @@ def main():
     explainability_result_path = os.path.join(output_path, r"Results/XAI/")
     model_result_path = os.path.join(output_path, r"Results/Models/")
     performance_result_path = os.path.join(output_path, r"Results/Performance/")
-    intermediate_data_path = os.path.join(output_path, r"Results/Intermediate_Data")
+    intermediate_data_path = os.path.join(output_path, r"Results/Intermediate_data")
 
     # Specify data location
     # data_path = "/home/cspielvogel/DataStorage/Bone_scintigraphy/Data/umap_feats_pg.csv"
@@ -102,8 +108,7 @@ def main():
     # Create save directories if they do not exist yet
     for path in [eda_result_path, explainability_result_path, model_result_path, performance_result_path,
                  intermediate_data_path]:
-        if not os.path.exists(path):
-            os.makedirs(path)
+        create_path_if_not_exist(path)
 
     # Load data to table
     df = pd.read_csv(data_path, sep=";", index_col=0)
@@ -175,16 +180,14 @@ def main():
     dt_param_grid = {}
 
     nn = MLPClassifier()
-    # nn_param_grid = {"hidden_layer_sizes": [(32, 64, 32)],
-    #                  "early_stopping": [True],
-    #                  "n_iter_no_change": [20],
-    #                  "max_iter": [1000],
-    #                  "activation": ["relu", "tanh", "logistic"],
-    #                  "solver": ["adam"],
-    #                  "learning_rate_init": [0.01, 0.001, 0.0001]}
-    # nn_param_grid = {}
-    nn_param_grid = {"hidden_layer_sizes": [(2, 1), (10, 1)],
-                     "solver": ["adam"]}
+    nn_param_grid = {"hidden_layer_sizes": [(32, 64, 32)],
+                     "early_stopping": [True],
+                     "n_iter_no_change": [20],
+                     "max_iter": [1000],
+                     "activation": ["relu", "tanh", "logistic"],
+                     "solver": ["adam"],
+                     "learning_rate_init": [0.01, 0.001, 0.0001]}
+    nn_param_grid = {}
 
     rf = RandomForestClassifier()
     rf_param_grid = {"criterion": ["entropy"],
@@ -438,6 +441,11 @@ def main():
 
         # Plot feature importances as determined using training and validation data
         plot_title_permutation_importance = f"permutation_importance_{clf}"
+        importances_save_path = os.path.join(explainability_result_path,
+                                             "Permutation_importances")
+        create_path_if_not_exist(importances_save_path)
+        train_importances_save_path = os.path.join(importances_save_path,
+                                                   plot_title_permutation_importance + "-train")
         plot_importances(importances_mean=overall_mean_importances_train,
                          importances_std=overall_std_importances_train,
                          feature_names=feature_names_selected,
@@ -445,9 +453,10 @@ def main():
                          order_alphanumeric=True,
                          include_top=0,
                          display_plots=False,
-                         save_path=os.path.join(explainability_result_path,
-                                                plot_title_permutation_importance + "-train"))
+                         save_path=train_importances_save_path)
 
+        test_importances_save_path = os.path.join(importances_save_path,
+                                                  plot_title_permutation_importance + "-test")
         plot_importances(importances_mean=overall_mean_importances_val,
                          importances_std=overall_std_importances_val,
                          feature_names=feature_names_selected,
@@ -455,19 +464,26 @@ def main():
                          order_alphanumeric=True,
                          include_top=0,
                          display_plots=False,
-                         save_path=os.path.join(explainability_result_path,
-                                                plot_title_permutation_importance + "-test"))
+                         save_path=test_importances_save_path)
 
         # Partial dependenced plots (DPD)
+        pdp_save_path = os.path.join(explainability_result_path, "Partial_dependence_plots")
+        create_path_if_not_exist(pdp_save_path)
         plot_partial_dependences(model=optimized_model,
                                  x=x_preprocessed,
                                  y=y,
                                  feature_names=feature_names_selected,
                                  clf_name=clf,
-                                 save_path=explainability_result_path)
+                                 save_path=pdp_save_path)
 
         # Create surrogate models
         if clf not in ["dt", "ebm"]:
+            surrogate_models_save_path = os.path.join(explainability_result_path, "Surrogate_models")
+            create_path_if_not_exist(surrogate_models_save_path)
+
+            # Decision tree surrogate model
+            dt_surrogate_models_save_path = os.path.join(surrogate_models_save_path,
+                                                         f"dt_surrogate_model_for-{clf}.pickle")
             dt_surrogate_params = {     # TODO: allow customization
                 "max_depth": 3,
                 "min_samples_leaf": 3
@@ -476,32 +492,39 @@ def main():
                                                     features=x_preprocessed,
                                                     params=dt_surrogate_params,
                                                     surrogate_type="dt",
-                                                    save_path=os.path.join(explainability_result_path,
-                                                                           f"dt_surrogate_model_for-{clf}.pickle"),
+                                                    save_path=dt_surrogate_models_save_path,
                                                     verbose=True)
+
+            # EBM surrogate model
+            ebm_surrogate_models_save_path = os.path.join(surrogate_models_save_path,
+                                                          f"ebm_surrogate_model_for-{clf}.pickle")
             ebm_surrogate_params = {}
             ebm_surrogate_model, _ = surrogate_model(opaque_model=optimized_model,
                                                      features=x_preprocessed,
                                                      params=ebm_surrogate_params,
                                                      surrogate_type="ebm",
-                                                     save_path=os.path.join(explainability_result_path,
-                                                                f"ebm_surrogate_model_for-{clf}.pickle"),
+                                                     save_path=ebm_surrogate_models_save_path,
                                                      verbose=True)
 
             # Create and save surrogate tree visualization
+            dt_surrogate_model_visualization_save_path = os.path.join(surrogate_models_save_path,
+                                                                      "dt_surrogate_model.svg")
             viz = dtreeviz(dt_surrogate_model, x_preprocessed, y,
                            target_name="Label",
                            feature_names=feature_names_selected,
                            class_names=[str(label) for label in dt_surrogate_model.classes_])
-            viz.save(os.path.join(explainability_result_path, "dt_surrogate_model.svg"))
+            viz.save(dt_surrogate_model_visualization_save_path)
 
         # SHAP analysis and plotting
+        shap_save_path = os.path.join(explainability_result_path, "SHAP")
+        create_path_if_not_exist(shap_save_path)
+
         plot_shap_features(model=optimized_model,
                            x=x_preprocessed,
                            feature_names=feature_names_selected,
                            index_names=x_preprocessed_df.index,
                            clf_name=clf,
-                           save_path=explainability_result_path,
+                           save_path=shap_save_path,
                            verbose=True)
 
     # Append performance to result table
@@ -530,8 +553,4 @@ def main():
 
 
 if __name__ == "__main__":
-    # cpu_count = multiprocessing.cpu_count()
-    # allocated_threads = cpu_count - 2
-    #
-    # with parallel_backend("threading", n_jobs=allocated_threads):
     main()
