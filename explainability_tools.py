@@ -103,7 +103,7 @@ def plot_shap_features(model, x, feature_names, index_names, clf_name, classes, 
 
     # SHAP analysis
     if verbose is True:
-        print("[XAI] Computing SHAP importances")
+        print(f"[XAI] Computing SHAP importances for {clf_name}")
 
     # Ensure plotting summary as bar for multiclass and beeswarm for binary classification
     if len(classes) > 2:
@@ -232,10 +232,6 @@ def surrogate_model(opaque_model, features, params, surrogate_type="dt", save_pa
     :return: tuple containing the surrogate model objects as numpy.ndarray and the surrogate performance metrics
              as pandas.core.series.Series
     """
-
-    if verbose is True:
-        # Display status output
-        print(f"[XAI] Creating {surrogate_type} surrogate model")
 
     # Perform inference using opaque model and provided data
     opaque_pred = opaque_model.predict(features)

@@ -82,14 +82,14 @@ def create_path_if_not_exist(path):
 
 def main():
     # Set hyperparameters
-    num_folds = 1
+    num_folds = 3
     label_name = "Label"
     # label_name = "1"
     # label_name = "OS_histo36"
     # label_name = "Malign"
     verbose = True
     # classifiers_to_run = ["ebm", "dt", "knn", "nn", "rf", "xgb"]
-    classifiers_to_run = ["rf"]
+    classifiers_to_run = ["rf", "dt"]
 
     # Set output paths
     # output_path = r"C:\Users\cspielvogel\PycharmProjects\HNSCC"
@@ -114,31 +114,17 @@ def main():
     # Load data to table
     df = pd.read_csv(data_path, sep=";", index_col=0)
 
-    # # Perform EDA and save results
-    # run_eda(features=df.drop(label_name, axis="columns"),
-    #         labels=df[label_name],
-    #         label_column=label_name,
-    #         save_path=eda_result_path,
-    #         analyses_to_run=["pandas_profiling"],
-    #         verbose=verbose)
+    # Perform EDA and save results
+    run_eda(features=df.drop(label_name, axis="columns"),
+            labels=df[label_name],
+            label_column=label_name,
+            save_path=eda_result_path,
+            analyses_to_run=["pandas_profiling"],
+            verbose=verbose)
 
     # Perform one hot encoding of categorical features before standard scaling in EDA visualizations
     categorical_mask = df.dtypes == object
     categorical_columns = df.columns[categorical_mask].tolist()
-
-    # # Omit label if categorical
-    # if label_name in categorical_columns:
-    #     categorical_columns.remove(label_name)
-    #
-    # one_hot_encoder = OneHotEncoder(handle_unknown="ignore", sparse=False)
-    # one_hot_encoder.fit(df[categorical_columns])
-    # cat_ohe = one_hot_encoder.transform(
-    #     df[categorical_columns])  # Will be all zero if unknown category in transform
-    # ohe_df = pd.DataFrame(cat_ohe,
-    #                       columns=one_hot_encoder.get_feature_names(input_features=categorical_columns),
-    #                       index=df.index)
-    # df = pd.concat([df, ohe_df], axis="columns")
-    # df.drop(columns=categorical_columns, axis="columns", inplace=True)
 
     # Perform standardized preprocessing
     preprocessor = TabularPreprocessor(label_name=label_name,
@@ -163,7 +149,7 @@ def main():
 
     feature_names = x.columns
 
-    # Setup classifiers
+    # Setup classifiers and parameters grids
     ebm = ExplainableBoostingClassifier()
     ebm_param_grid = {"max_bins": [256],
                       "max_interaction_bins": [64],
@@ -222,7 +208,8 @@ def main():
                       "colsample_bytree": [0.5, 0.7, 1.0]}
     xgb_param_grid = {}
 
-    clfs = {"ebm":
+    # Define available classifiers
+    available_clfs = {"ebm":
                 {"classifier": ebm,
                  "parameters": ebm_param_grid},
             "knn":
@@ -241,7 +228,13 @@ def main():
                 {"classifier": xgb,
                  "parameters": xgb_param_grid}}
 
-    clfs_performance = {"acc": [], "sns": [], "spc": [], "ppv": [], "npv": [], "bacc": [], "auc": []}
+    # Add classifiers to run and initialize performance container holding each classifier performance for each fold fold
+    clfs = {}
+    performance_clfwise_foldwise = {}
+    for clf in classifiers_to_run:
+        clfs[clf] = available_clfs[clf]
+        performance_clfwise_foldwise[clf] = {"acc": [], "sns": [], "spc": [], "ppv": [], "npv": [], "bacc": [],
+                                             "auc": []}
 
     # Get number of classes
     num_classes = len(np.unique(y))
@@ -249,54 +242,48 @@ def main():
     # Initialize result table
     results = pd.DataFrame(index=classifiers_to_run)
 
-    # Iterate over classifiers
-    clf_index = -1
-    for clf in clfs:
-        if clf not in classifiers_to_run:
-            continue
+    if verbose is True:
+        print(f"[Model training] Starting model training")
 
-        clf_index += 1  # Update index for classifiers which are actually run
+    # Iterate over (MCCV) folds
+    tqdm_bar = tqdm(np.arange(num_folds))
+    for fold_index in tqdm_bar:
 
-        if verbose is True:
-            print(f"[Model training] Starting training for {clf} classifier")
+        # Split into training and test data
+        x_train, x_test, y_train, y_test = train_test_split(x, y,
+                                                            test_size=0.15,
+                                                            stratify=y,
+                                                            shuffle=True,
+                                                            random_state=fold_index)
 
-        # Initialize cumulated confusion matrix and fold-wise performance containers
-        cms = np.zeros((num_classes, num_classes))
-        performance_foldwise = {"acc": [], "sns": [], "spc": [], "ppv": [], "npv": [], "bacc": [], "auc": []}
+        # Perform standardization and feature imputation
+        intra_fold_preprocessor = TabularIntraFoldPreprocessor(imputation_method="knn",
+                                                               k="automated",
+                                                               normalization="standardize")
+        intra_fold_preprocessor = intra_fold_preprocessor.fit(x_train)
+        x_train = intra_fold_preprocessor.transform(x_train)
+        x_test = intra_fold_preprocessor.transform(x_test)
 
-        # Iterate over MCCV
-        tqdm_bar = tqdm(np.arange(num_folds))
-        for fold_index in tqdm_bar:
+        # Perform feature selection
+        selected_indices, x_train, x_test = mrmr_feature_selection(x_train.values,
+                                                                   y_train.values,
+                                                                   x_test.values,
+                                                                   # score_func=f_classif,
+                                                                   num_features="log2n")
+        feature_names_selected = feature_names[selected_indices]
 
-            # Split into training and test data
-            x_train, x_test, y_train, y_test = train_test_split(x, y,
-                                                                test_size=0.15,
-                                                                stratify=y,
-                                                                shuffle=True,
-                                                                random_state=fold_index)
+        # SMOTE
+        if num_classes == 2:
+            smote = SMOTE(random_state=fold_index, sampling_strategy=1)
+        else:
+            smote = SMOTE(random_state=fold_index, sampling_strategy="not majority")
+        x_train, y_train = smote.fit_resample(x_train, y_train)
 
-            # Perform standardization and feature imputation
-            intra_fold_preprocessor = TabularIntraFoldPreprocessor(imputation_method="knn",
-                                                                   k="automated",
-                                                                   normalization="standardize")
-            intra_fold_preprocessor = intra_fold_preprocessor.fit(x_train)
-            x_train = intra_fold_preprocessor.transform(x_train)
-            x_test = intra_fold_preprocessor.transform(x_test)
+        # Iterate over classifiers
+        for clf in clfs:
 
-            # Perform feature selection
-            selected_indices, x_train, x_test = mrmr_feature_selection(x_train.values,
-                                                                       y_train.values,
-                                                                       x_test.values,
-                                                                       # score_func=f_classif,
-                                                                       num_features="log2n")
-            feature_names_selected = feature_names[selected_indices]
-
-            # SMOTE
-            if num_classes == 2:
-                smote = SMOTE(random_state=fold_index, sampling_strategy=1)
-            else:
-                smote = SMOTE(random_state=fold_index, sampling_strategy="not majority")
-            x_train, y_train = smote.fit_resample(x_train, y_train)
+            # Initialize cumulated confusion matrix and fold-wise performance containers
+            cms = np.zeros((num_classes, num_classes))
 
             # Setup model
             model = clfs[clf]["classifier"]
@@ -349,18 +336,68 @@ def main():
 
             # Append performance to fold-wise and overall containers
             cms += cm
-            performance_foldwise["acc"].append(acc)
-            performance_foldwise["sns"].append(sns)
-            performance_foldwise["spc"].append(spc)
-            performance_foldwise["ppv"].append(ppv)
-            performance_foldwise["npv"].append(npv)
-            performance_foldwise["bacc"].append(bacc)
-            performance_foldwise["auc"].append(auc)
+            performance_clfwise_foldwise[clf]["acc"].append(acc)
+            performance_clfwise_foldwise[clf]["sns"].append(sns)
+            performance_clfwise_foldwise[clf]["spc"].append(spc)
+            performance_clfwise_foldwise[clf]["ppv"].append(ppv)
+            performance_clfwise_foldwise[clf]["npv"].append(npv)
+            performance_clfwise_foldwise[clf]["bacc"].append(bacc)
+            performance_clfwise_foldwise[clf]["auc"].append(auc)
 
             # Progressbar
             if verbose is True:
-                tqdm_bar.set_description(str(f"[Model training] Finished classifier {clf_index+1} /"
-                                             f" {len(classifiers_to_run)} ({clf}) | Fold {fold_index+1} / {num_folds}"))
+                tqdm_bar.set_description(str(f"[Model training] Finished fold {fold_index+1} / {num_folds}"))
+
+    # Initialize overall performance table
+    overall_performances = pd.DataFrame(columns=["acc", "sns", "spc", "ppv", "npv", "bacc", "auc"],
+                                        index=list(clfs.keys()))
+
+    # Iterate over classifiers and aggregate fold-wise performances
+    for clf in clfs:
+
+        # Calculate overall performance
+        for metric in performance_clfwise_foldwise[clf]:
+            performance_mean = np.mean(performance_clfwise_foldwise[clf][metric])
+            performance_mean_rounded = np.round(performance_mean, 2)
+            overall_performances.at[clf, metric] = performance_mean_rounded
+
+        # Display and save confusion matrix figure
+        seaborn.heatmap(cms, annot=True, cmap="Blues", fmt="g")
+        plt.xlabel("Predicted")
+        plt.ylabel("Actual")
+        plt.title("{} - Confusion matrix".format(clf))
+        plt.savefig(os.path.join(performance_result_path, f"confusion_matrix-{clf}.png"))
+        plt.close()
+
+        # Save confusion matrix as CSV
+        label_names = np.sort(np.unique(y))
+        cm_df = pd.DataFrame(cms,
+                             columns=[str(name) + " (actual)" for name in label_names],
+                             index=[str(name) + " (predicted)" for name in label_names])
+        cm_df.to_csv(os.path.join(performance_result_path, f"confusion_matrix-{clf}.csv"), sep=";")
+
+    # Save result table with all classifiers performances
+    colors = ["dimgray", "gray", "darkgray", "lightgray", "gainsboro", "whitesmoke", "maroon"]
+    overall_performances.to_csv(os.path.join(performance_result_path, "performances.csv"), sep=";")
+    overall_performances.plot.bar(rot=45, color=colors).legend(loc="upper right")
+
+    if verbose is True:
+        print("[Results] Displaying performance")
+        print(overall_performances)
+
+    # Adjust legend position so it doesn't mask any bars
+    handles = [plt.Rectangle((0, 0), 1, 1, color=color) for color in colors]
+    plt.legend(handles, overall_performances.columns, loc="best", bbox_to_anchor=(1.13, 1.15))
+
+    # Save and display performance plot
+    plt.yticks(np.arange(0, 1.1, 0.1))
+    plt.grid(linestyle="dashed", axis="y")
+    plt.title("Overall performance")
+    plt.savefig(os.path.join(performance_result_path, "performance.png".format(clf)))
+    plt.close()
+
+    # Iterate over classifiers, create final models and apply XAI techniques
+    for clf in clfs:
 
         # Setup final model
         seed = 0
@@ -429,31 +466,6 @@ def main():
         overall_std_importances_train = raw_importances_foldwise_std_train / num_folds
         overall_mean_importances_val = raw_importances_foldwise_mean_val / num_folds
         overall_std_importances_val = raw_importances_foldwise_std_val / num_folds
-
-        # Calculate overall performance
-        for metric in performance_foldwise:
-            avg_metric = np.round(np.sum(performance_foldwise[metric]) / len(performance_foldwise[metric]), 2)
-            clfs_performance[metric].append(avg_metric)
-
-        if verbose is True:
-            print(str(f"[Model validation] Finished {clf} with MCCV-wide AUC [{clfs_performance['auc'][clf_index]}] and"
-                      f" confusion matrix:"))
-            print(cms)
-
-        # Display and save confusion matrix figure
-        seaborn.heatmap(cms, annot=True, cmap="Blues", fmt="g")
-        plt.xlabel("Predicted")
-        plt.ylabel("Actual")
-        plt.title("{} - Confusion matrix".format(clf))
-        plt.savefig(os.path.join(performance_result_path, f"confusion_matrix-{clf}.png"))
-        plt.close()
-
-        # Save confusion matrix as CSV
-        label_names = np.sort(np.unique(y))
-        cm_df = pd.DataFrame(cms,
-                             columns=[str(name) + " (actual)" for name in label_names],
-                             index=[str(name) + " (predicted)" for name in label_names])
-        cm_df.to_csv(os.path.join(performance_result_path, f"confusion_matrix-{clf}.csv"), sep=";")
 
         # Plot feature importances as determined using training and validation data
         plot_title_permutation_importance = f"permutation_importance_{clf}"
@@ -547,30 +559,6 @@ def main():
                            classes=decoded_class_names,
                            save_path=shap_save_path,
                            verbose=True)
-
-    # Append performance to result table
-    for metric in clfs_performance:
-        results[metric] = clfs_performance[metric]
-
-    # Save result table
-    colors = ["dimgray", "gray", "darkgray", "lightgray", "gainsboro", "whitesmoke", "maroon"]
-    results.to_csv(os.path.join(performance_result_path, "performances.csv"), sep=";")
-    results.plot.bar(rot=45, color=colors).legend(loc="upper right")
-
-    if verbose is True:
-        print("[Results] Displaying performance")
-        print(results)
-
-    # Adjust legend position so it doesn't mask any bars
-    handles = [plt.Rectangle((0, 0), 1, 1, color=color) for color in colors]
-    plt.legend(handles, clfs_performance.keys(), loc="best", bbox_to_anchor=(1.13, 1.15))
-
-    # Save and display performance plot
-    plt.yticks(np.arange(0, 1.1, 0.1))
-    plt.grid(linestyle="dashed", axis="y")
-    plt.title("Overall performance")
-    plt.savefig(os.path.join(performance_result_path, "performance.png".format(clf)))
-    plt.close()
 
 
 if __name__ == "__main__":
