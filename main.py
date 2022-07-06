@@ -538,7 +538,10 @@ def main():
             dt_surrogate_model_visualization_save_path = os.path.join(surrogate_models_save_path,
                                                                       f"dt_surrogate_model_for-{clf}.svg")
             int_label_names = [label for label in dt_surrogate_model.classes_]
-            decoded_class_names = list(preprocessor.label_encoder.inverse_transform(int_label_names))
+            if preprocessor.label_encoder != None:
+                decoded_class_names = list(preprocessor.label_encoder.inverse_transform(int_label_names))
+            else:
+                decoded_class_names = int_label_names
 
             viz = dtreeviz(dt_surrogate_model, x_preprocessed, y,
                            target_name="Label",
@@ -549,7 +552,10 @@ def main():
         # SHAP analysis and plotting
         shap_save_path = os.path.join(explainability_result_path, "SHAP")
         create_path_if_not_exist(shap_save_path)
-        decoded_class_names = list(preprocessor.label_encoder.inverse_transform(optimized_model.best_estimator_.classes_))
+        if preprocessor.label_encoder != None:
+            decoded_class_names = list(preprocessor.label_encoder.inverse_transform(optimized_model.best_estimator_.classes_))
+        else:
+            decoded_class_names = optimized_model.best_estimator_.classes_
 
         plot_shap_features(model=optimized_model,
                            x=x_preprocessed,

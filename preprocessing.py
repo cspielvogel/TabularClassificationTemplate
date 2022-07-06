@@ -178,9 +178,9 @@ class TabularPreprocessor:
             self.label_encoder = LabelEncoder()
             data[self.label_name] = self.label_encoder.fit_transform(data[self.label_name])
 
-            # Save label encoder to pickle file
-            with open(self.label_encoder_path, "wb") as file:
-                pickle.dump(self.label_encoder, file)
+        # Save label encoder to pickle file
+        with open(self.label_encoder_path, "wb") as file:
+            pickle.dump(self.label_encoder, file)
 
         # Check whether there are any categorical columns
         if len(self.categorical_columns) != 0:
