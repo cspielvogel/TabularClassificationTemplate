@@ -55,6 +55,8 @@ from sklearn.metrics import accuracy_score, confusion_matrix
 from sklearn.feature_selection import f_classif
 from sklearn.inspection import permutation_importance
 from sklearn.preprocessing import OneHotEncoder, LabelEncoder
+from sklearn.calibration import CalibratedClassifierCV
+from sklearn.metrics import brier_score_loss
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
 import shap
@@ -92,7 +94,6 @@ def main():
     classifiers_to_run = ["rf", "dt"]
 
     # Set output paths
-    # output_path = r"C:\Users\cspielvogel\PycharmProjects\HNSCC"
     output_path = r"./Tmp"
     eda_result_path = os.path.join(output_path, r"Results/EDA/")
     explainability_result_path = os.path.join(output_path, r"Results/XAI/")
@@ -429,7 +430,14 @@ def main():
                                                                                   # score_func=f_classif,
                                                                                   num_features="log2n")
 
+        # Get feature names selected
         feature_names_selected = feature_names[selected_indices_preprocessed]
+
+        # Add feature names enabling interpretability of output plots (only needed for some algorithms like ebm)
+        try:
+            model.set_params(**{"feature_names": feature_names_selected})
+        except ValueError:
+            pass
 
         # Hyperparameter tuning for final model
         optimized_model = RandomizedSearchCV(model,
@@ -437,12 +445,6 @@ def main():
                                              cv=10,
                                              random_state=seed)
         optimized_model.fit(x_preprocessed, y)
-
-        # Add feature names enabling interpretability of output plots (only needed for some algorithms like ebm)
-        try:
-            model.set_params(**{"feature_names": feature_names_selected})
-        except ValueError:
-            pass
 
         # Save final model to file
         with open(os.path.join(model_result_path, f"{clf}_model.pickle"), "wb") as file:
