@@ -26,6 +26,9 @@ Template for binary classifications of tabular data including preprocessing
 # TODO: Replace PDP plots with https://github.com/SauceCat/PDPbox
 # TODO: Optional: Add EBM interpretability plots to XAI
 # TODO: Add EBM surrogate interpretability plots to XAI
+# TODO: Check how to make EBM work with calibration
+# TODO: Check why some classifiers don't have the same number of measurements for the original models calibration curve
+# TODO: Add Brier scores to output for calibration
 
 Input data format specifications:
     - As of now, a file path has to be supplied to the main function as string value for the variable "data_path";
@@ -55,8 +58,6 @@ from sklearn.metrics import accuracy_score, confusion_matrix
 from sklearn.feature_selection import f_classif
 from sklearn.inspection import permutation_importance
 from sklearn.preprocessing import OneHotEncoder, LabelEncoder
-from sklearn.calibration import CalibratedClassifierCV
-from sklearn.metrics import brier_score_loss
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
 import shap
@@ -64,6 +65,7 @@ from xgboost import XGBClassifier
 from interpret.glassbox import ExplainableBoostingClassifier
 from dtreeviz.trees import dtreeviz
 
+import calibration
 from exploratory_data_analysis import run_eda
 import metrics
 from preprocessing import TabularPreprocessor, TabularIntraFoldPreprocessor
@@ -89,9 +91,10 @@ def main():
     # label_name = "1"
     # label_name = "OS_histo36"
     # label_name = "Malign"
+    perform_calibration = True
     verbose = True
     # classifiers_to_run = ["ebm", "dt", "knn", "nn", "rf", "xgb"]
-    classifiers_to_run = ["rf", "dt"]
+    classifiers_to_run = ["ebm"]
 
     # Set output paths
     output_path = r"./Tmp"
@@ -100,6 +103,7 @@ def main():
     model_result_path = os.path.join(output_path, r"Results/Models/")
     performance_result_path = os.path.join(output_path, r"Results/Performance/")
     intermediate_data_path = os.path.join(output_path, r"Results/Intermediate_data")
+    calibration_path = os.path.join(output_path, r"Results/Calibration")
 
     # Specify data location
     # data_path = "/home/cspielvogel/DataStorage/Bone_scintigraphy/Data/umap_feats_pg.csv"
@@ -109,7 +113,7 @@ def main():
 
     # Create save directories if they do not exist yet
     for path in [eda_result_path, explainability_result_path, model_result_path, performance_result_path,
-                 intermediate_data_path]:
+                 intermediate_data_path, calibration_path]:
         create_path_if_not_exist(path)
 
     # Load data to table
@@ -298,15 +302,15 @@ def main():
             optimized_model.fit(x_train, y_train)
 
             # Compute and display fold-wise performance
-            y_pred = optimized_model.best_estimator_.predict(x_test)
+            y_pred = optimized_model.predict(x_test)
 
             # Compute permutation feature importance scores on training and validation data
-            raw_importances_train = permutation_importance(optimized_model.best_estimator_, x_test, y_test,
+            raw_importances_train = permutation_importance(optimized_model, x_test, y_test,
                                                            n_repeats=30,
                                                            scoring="roc_auc_ovr",
                                                            n_jobs=10,  # TODO: adjust and automate
                                                            random_state=fold_index)
-            raw_importances_val = permutation_importance(optimized_model.best_estimator_, x_train, y_train,
+            raw_importances_val = permutation_importance(optimized_model, x_train, y_train,
                                                          n_repeats=30,
                                                          scoring="roc_auc_ovr",
                                                          n_jobs=10,  # TODO: adjust and automate
@@ -445,21 +449,33 @@ def main():
                                              cv=10,
                                              random_state=seed)
         optimized_model.fit(x_preprocessed, y)
+        best_params = optimized_model.best_params_
+        optimized_model = optimized_model.best_estimator_
+
+        if perform_calibration is True:
+
+            # Perform probability calibration of final model using ensemble approach
+            optimized_model = calibration.calibrate(model=optimized_model,
+                                                    features=x_preprocessed,
+                                                    labels=y,
+                                                    calibration_path=calibration_path, # TODO: add clf name
+                                                    clf_name=clf,
+                                                    verbose=verbose)
 
         # Save final model to file
         with open(os.path.join(model_result_path, f"{clf}_model.pickle"), "wb") as file:
-            pickle.dump(optimized_model.best_estimator_, file)
+            pickle.dump(optimized_model, file)
 
         # Save hyperparameters of final model to JSON file
         with open(os.path.join(model_result_path, f"{clf}_optimized_hyperparameters.json"), "w") as file:
             param_dict_json_conform = {}     # Necessary since JSON doesn't take some data types such as int32
-            for key in optimized_model.best_params_:
+            for key in best_params:
                 try:
-                    param_dict_json_conform[key] = float(optimized_model.best_params_[key])
+                    param_dict_json_conform[key] = float(best_params[key])
                 except ValueError:
-                    param_dict_json_conform[key] = optimized_model.best_params_[key]
+                    param_dict_json_conform[key] = best_params[key]
                 except TypeError:
-                    param_dict_json_conform[key] = optimized_model.best_params_[key]
+                    param_dict_json_conform[key] = best_params[key]
 
             json.dump(param_dict_json_conform, file, indent=4)
 
@@ -555,9 +571,9 @@ def main():
         shap_save_path = os.path.join(explainability_result_path, "SHAP")
         create_path_if_not_exist(shap_save_path)
         if preprocessor.label_encoder != None:
-            decoded_class_names = list(preprocessor.label_encoder.inverse_transform(optimized_model.best_estimator_.classes_))
+            decoded_class_names = list(preprocessor.label_encoder.inverse_transform(optimized_model.classes_))
         else:
-            decoded_class_names = optimized_model.best_estimator_.classes_
+            decoded_class_names = optimized_model.classes_
 
         plot_shap_features(model=optimized_model,
                            x=x_preprocessed,

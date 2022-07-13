@@ -62,7 +62,7 @@ def plot_partial_dependences(model, x, y, feature_names, clf_name, save_path):
 
             # Create PDP for each target class
             for target_index in np.arange(num_classes):
-                PartialDependenceDisplay.from_estimator(model.best_estimator_,
+                PartialDependenceDisplay.from_estimator(model,
                                                         X=x,
                                                         features=[feature_index],
                                                         feature_names=feature_names,
@@ -75,7 +75,7 @@ def plot_partial_dependences(model, x, y, feature_names, clf_name, save_path):
 
         # Single class
         else:
-            PartialDependenceDisplay.from_estimator(model.best_estimator_,
+            PartialDependenceDisplay.from_estimator(model,
                                                     X=x,
                                                     features=[feature_index],
                                                     feature_names=feature_names)
@@ -107,9 +107,9 @@ def plot_shap_features(model, x, feature_names, index_names, clf_name, classes, 
 
     # Ensure plotting summary as bar for multiclass and beeswarm for binary classification
     if len(classes) > 2:
-        predictor = model.best_estimator_.predict_proba
+        predictor = model.predict_proba
     else:
-        predictor = model.best_estimator_.predict
+        predictor = model.predict
 
     # Compute SHAP values
     explainer = shap.KernelExplainer(predictor, x)
