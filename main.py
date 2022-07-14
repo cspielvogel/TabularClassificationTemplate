@@ -29,6 +29,7 @@ Template for binary classifications of tabular data including preprocessing
 # TODO: Check how to make EBM work with calibration
 # TODO: Check why some classifiers don't have the same number of measurements for the original models calibration curve
 # TODO: Add Brier scores to output for calibration
+# TODO: Add relevant output to log file in results
 
 Input data format specifications:
     - As of now, a file path has to be supplied to the main function as string value for the variable "data_path";
