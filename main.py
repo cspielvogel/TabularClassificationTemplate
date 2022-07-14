@@ -96,6 +96,12 @@ def main():
     # classifiers_to_run = ["ebm", "dt", "knn", "nn", "rf", "xgb"]
     classifiers_to_run = ["ebm"]
 
+    # Specify data location
+    # data_path = "/home/cspielvogel/DataStorage/Bone_scintigraphy/Data/umap_feats_pg.csv"
+    # data_path = r"Data/test_data.csv"
+    # data_path = r"C:\Users\cspielvogel\Downloads\fdb_multiomics_w_labels_all.csv"
+    data_path = r"Data/test_data.csv"
+
     # Set output paths
     output_path = r"./Tmp"
     eda_result_path = os.path.join(output_path, r"Results/EDA/")
@@ -104,12 +110,6 @@ def main():
     performance_result_path = os.path.join(output_path, r"Results/Performance/")
     intermediate_data_path = os.path.join(output_path, r"Results/Intermediate_data")
     calibration_path = os.path.join(output_path, r"Results/Calibration")
-
-    # Specify data location
-    # data_path = "/home/cspielvogel/DataStorage/Bone_scintigraphy/Data/umap_feats_pg.csv"
-    # data_path = r"Data/test_data.csv"
-    # data_path = r"C:\Users\cspielvogel\Downloads\fdb_multiomics_w_labels_all.csv"
-    data_path = r"Data/test_data.csv"
 
     # Create save directories if they do not exist yet
     for path in [eda_result_path, explainability_result_path, model_result_path, performance_result_path,
