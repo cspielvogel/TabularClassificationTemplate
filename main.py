@@ -297,6 +297,7 @@ def main():
             optimized_model = RandomizedSearchCV(model,
                                                  param_distributions=clfs[clf]["parameters"],
                                                  cv=5,
+                                                 scoring="roc_auc",
                                                  random_state=fold_index)
             optimized_model.fit(x_train, y_train)
 
@@ -446,6 +447,7 @@ def main():
         optimized_model = RandomizedSearchCV(model,
                                              param_distributions=clfs[clf]["parameters"],
                                              cv=10,
+                                             scoring=roc_auc,
                                              random_state=seed)
         optimized_model.fit(x_preprocessed, y)
         best_params = optimized_model.best_params_
