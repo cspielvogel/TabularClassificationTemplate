@@ -94,7 +94,8 @@ def main():
     perform_calibration = True
     verbose = True
     # classifiers_to_run = ["ebm", "dt", "knn", "nn", "rf", "xgb"]
-    classifiers_to_run = ["ebm"]
+    classifiers_to_run = ["dt", "knn", "rf", "xgb"]
+    # classifiers_to_run = ["ebm"]
 
     # Specify data location
     # data_path = "/home/cspielvogel/DataStorage/Bone_scintigraphy/Data/umap_feats_pg.csv"
@@ -103,7 +104,7 @@ def main():
     data_path = r"Data/test_data.csv"
 
     # Set output paths
-    output_path = r"./Tmp"
+    output_path = r"./Tmp_hyperparam-opt"
     eda_result_path = os.path.join(output_path, r"Results/EDA/")
     explainability_result_path = os.path.join(output_path, r"Results/XAI/")
     model_result_path = os.path.join(output_path, r"Results/Models/")
@@ -168,14 +169,14 @@ def main():
                       "min_samples_leaf": [2, 4],
                       "max_leaves": [3],
                       "n_jobs": [10]}
-    ebm_param_grid = {"interactions": [5]}     # TODO: reactivate parameter grids
+    # ebm_param_grid = {}     # TODO: reactivate parameter grids
 
     knn = KNeighborsClassifier()
     knn_param_grid = {"weights": ["distance"],
                       "n_neighbors": [int(val) for val in np.round(np.sqrt(x.shape[1])) + np.arange(5) + 1] +
                                      [int(val) for val in np.round(np.sqrt(x.shape[1])) - np.arange(5) if val >= 1],
                       "p": np.arange(1, 5)}
-    knn_param_grid = {}
+    # knn_param_grid = {}
 
     dt = DecisionTreeClassifier()
     dt_param_grid = {"splitter": ["best", "random"],
@@ -183,7 +184,7 @@ def main():
                      "min_samples_split": [2, 4, 6],
                      "min_samples_leaf": [1, 3, 5, 6],
                      "max_features": ["auto", "sqrt", "log2"]}
-    dt_param_grid = {}
+    # dt_param_grid = {}
 
     nn = MLPClassifier()
     nn_param_grid = {"hidden_layer_sizes": [(32, 64, 32)],
@@ -193,7 +194,7 @@ def main():
                      "activation": ["relu", "tanh", "logistic"],
                      "solver": ["adam"],
                      "learning_rate_init": [0.01, 0.001, 0.0001]}
-    nn_param_grid = {}
+    # nn_param_grid = {}
 
     rf = RandomForestClassifier()
     rf_param_grid = {"criterion": ["entropy"],
@@ -202,7 +203,7 @@ def main():
                      "min_samples_split": [2, 4, 6],
                      "min_samples_leaf": [1, 3, 5, 6],
                      "max_features": ["auto", "sqrt", "log2"]}
-    rf_param_grid = {}
+    # rf_param_grid = {}
 
     xgb = XGBClassifier()
     xgb_param_grid = {"learning_rate": [0.20, 0.30],
@@ -210,7 +211,7 @@ def main():
                       "min_child_weight": [1, 3],
                       "gamma": [0.0, 0.2],
                       "colsample_bytree": [0.5, 0.7, 1.0]}
-    xgb_param_grid = {}
+    # xgb_param_grid = {}
 
     # Define available classifiers
     available_clfs = {"ebm":
@@ -398,7 +399,7 @@ def main():
     plt.yticks(np.arange(0, 1.1, 0.1))
     plt.grid(linestyle="dashed", axis="y")
     plt.title("Overall performance")
-    plt.savefig(os.path.join(performance_result_path, "performance.png".format(clf)))
+    plt.savefig(os.path.join(performance_result_path, "performances.png".format(clf)))
     plt.close()
 
     # Iterate over classifiers, create final models and apply XAI techniques
@@ -447,7 +448,7 @@ def main():
         optimized_model = RandomizedSearchCV(model,
                                              param_distributions=clfs[clf]["parameters"],
                                              cv=10,
-                                             scoring=roc_auc,
+                                             scoring="roc_auc",
                                              random_state=seed)
         optimized_model.fit(x_preprocessed, y)
         best_params = optimized_model.best_params_

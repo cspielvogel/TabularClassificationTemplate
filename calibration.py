@@ -107,10 +107,10 @@ def calibrate(model, features, labels, calibration_path, clf_name, verbose=True)
     :return: Calibrated model
     """
 
-    # # TODO: Implement EBM support
-    # if clf_name == "ebm":
-    #     print(f"[Warning] Calibration is currently not supported and therefore not performed for {clf_name}")
-    #     return model
+    # TODO: Implement EBM support
+    if clf_name == "ebm":
+        print(f"[Warning] Calibration is currently not supported and therefore not performed for {clf_name}")
+        return model
 
     # Set calibration method depending on data set size as suggested (scikit-learn.org/stable/modules/calibration.html)
     if len(labels) < 1000:
@@ -126,8 +126,6 @@ def calibrate(model, features, labels, calibration_path, clf_name, verbose=True)
                                               cv=3,
                                               ensemble=True,
                                               method=calibration_method)
-
-    print(features)
 
     calibrated_model.fit(features, labels)
 
