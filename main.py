@@ -87,9 +87,8 @@ def create_path_if_not_exist(path):
 
 def main():
     # Set hyperparameters
-    num_folds = 3
-    label_name = "Label"
-    # label_name = "1"
+    num_folds = 1
+    label_name = "1"
     # label_name = "OS_histo36"
     # label_name = "Malign"
     perform_calibration = True
@@ -120,13 +119,13 @@ def main():
     # Load data to table
     df = pd.read_csv(data_path, sep=";", index_col=0)
 
-    # Perform EDA and save results
-    run_eda(features=df.drop(label_name, axis="columns"),
-            labels=df[label_name],
-            label_column=label_name,
-            save_path=eda_result_path,
-            analyses_to_run=["pandas_profiling"],
-            verbose=verbose)
+    # # Perform EDA and save results
+    # run_eda(features=df.drop(label_name, axis="columns"),
+    #         labels=df[label_name],
+    #         label_column=label_name,
+    #         save_path=eda_result_path,
+    #         analyses_to_run=["pandas_profiling"],
+    #         verbose=verbose)
 
     # Perform one hot encoding of categorical features before standard scaling in EDA visualizations
     categorical_mask = df.dtypes == object
@@ -140,17 +139,16 @@ def main():
                                                                        "label_encoder.pickle"))
     df = preprocessor.fit_transform(df)
 
-    # Perform dimensionality reductions
-    run_eda(features=df.drop(label_name, axis="columns"),
-            labels=df[label_name],
-            label_column=label_name,
-            save_path=eda_result_path,
-            analyses_to_run=["umap", "tsne", "pca"],
-            verbose=verbose)
+    # # Perform dimensionality reductions
+    # run_eda(features=df.drop(label_name, axis="columns"),
+    #         labels=df[label_name],
+    #         label_column=label_name,
+    #         save_path=eda_result_path,
+    #         analyses_to_run=["umap", "tsne", "pca"],
+    #         verbose=verbose)
 
     # Separate data into training and test
     y = df[label_name]
-    # y = (df[label_name] < 2) * 1    # TODO: remove; only for PG classification
     x = df.drop(label_name, axis="columns")
 
     feature_names = x.columns
@@ -170,7 +168,7 @@ def main():
                       "min_samples_leaf": [2, 4],
                       "max_leaves": [3],
                       "n_jobs": [10]}
-    ebm_param_grid = {}     # TODO: reactivate parameter grids
+    ebm_param_grid = {"interactions": [5]}     # TODO: reactivate parameter grids
 
     knn = KNeighborsClassifier()
     knn_param_grid = {"weights": ["distance"],
@@ -459,7 +457,7 @@ def main():
             optimized_model = calibration.calibrate(model=optimized_model,
                                                     features=x_preprocessed,
                                                     labels=y,
-                                                    calibration_path=calibration_path, # TODO: add clf name
+                                                    calibration_path=calibration_path,
                                                     clf_name=clf,
                                                     verbose=verbose)
 
