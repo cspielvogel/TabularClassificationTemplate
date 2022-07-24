@@ -30,6 +30,8 @@ Template for binary classifications of tabular data including preprocessing
 # TODO: Check why some classifiers don't have the same number of measurements for the original models calibration curve
 # TODO: Add Brier scores to output for calibration
 # TODO: Add relevant output to log file in results
+# TODO: Add all possible classifier hyperparameters to settings.ini file
+# TODO: Add SVM classifier
 
 Input data format specifications:
     - As of now, a file path has to be supplied to the main function as string value for the variable "input_data_path";
@@ -97,7 +99,7 @@ def convert_str_to_container(string, container_type="tuple"):
     """
 
     if ", " not in string:
-        raise ValueError(f"{string} a list")
+        raise ValueError(f"{string} is not a list")
 
     if container_type == "tuple":
         brackets = ["(", ")"]
@@ -175,6 +177,30 @@ def auto_cast_string(string):
     return casted
 
 
+def load_hyperparameters(model, config):
+    """
+    Obtain parameter grids (e.g. for hyperparameter optimization) from loaded configuration file
+
+    :param model: Classifier object implementing .get_params() method such as of type sklearn.base.BaseEstimator
+    :param config: configparser.ConfigParser() containing the parameters
+    :return: dict containing the parameter grids
+    """
+
+    # Initialize output parameter grid
+    param_grid = {}
+
+    # Obtain all parameters available for the provided model
+    params = model.get_params()
+
+    # Iterate over each parameter
+    for param in params:
+
+        # Cast each string parameter to the most reasonable type
+        param_grid[param] = auto_cast_string(config[param])
+
+    return param_grid
+
+
 def main():
     # Get parameters from settings.ini file
     settings_path = "settings.ini"
@@ -182,15 +208,15 @@ def main():
     config = configparser.ConfigParser()
     config.read(settings_path)
 
-    verbose = config["Display"]["VERBOSE"] == "True"
-    input_data_path = config["Data"]["INPUT_DATA_FILE_PATH"]
-    input_file_separator = config["Data"]["INPUT_DATA_FILE_SEPARATOR"]
-    output_path = config["Data"]["OUTPUT_DATA_FOLDER_PATH"]
-    label_name = config["Data"]["LABEL_COLUMN_NAME"]
-    perform_eda = config["EDA"]["PERFORM_EDA"] == "True"
-    perform_calibration = config["Calibration"]["PERFORM_CALIBRATION"] == "True"
-    num_folds = int(config["Training"]["NUMBER_OF_FOLDS"])
-    classifiers_to_run = config["Classifiers"]["CLASSIFIERS_TO_RUN"].split(", ")
+    verbose = config["Display"]["verbose"] == "True"
+    input_data_path = config["Data"]["input_data_file_path"]
+    input_file_separator = config["Data"]["input_data_file_separator"]
+    output_path = config["Data"]["output_data_folder_path"]
+    label_name = config["Data"]["label_column_name"]
+    perform_eda = config["EDA"]["perform_eda"] == "True"
+    perform_calibration = config["Calibration"]["perform_calibration"] == "True"
+    num_folds = int(config["Training"]["number_of_folds"])
+    classifiers_to_run = config["Classifiers"]["classifiers_to_run"].split(", ")
 
     # Set output paths
     eda_result_path = os.path.join(output_path, r"Results/EDA/")
@@ -247,73 +273,37 @@ def main():
     # Setup classifiers and parameters grids
     ebm = ExplainableBoostingClassifier()
     ebm_hyperparams = config["EBM_hyperparameters"]
-    ebm_param_grid = {"max_bins": auto_cast_string(ebm_hyperparams["MAX_BINS"]),
-                      "max_interaction_bins": auto_cast_string(ebm_hyperparams["MAX_INTERACTION_BINS"]),
-                      "binning": auto_cast_string(ebm_hyperparams["BINNING"]),
-                      "interactions": auto_cast_string(ebm_hyperparams["INTERACTIONS"]),
-                      "outer_bags": auto_cast_string(ebm_hyperparams["OUTER_BAGS"]),
-                      "inner_bags": auto_cast_string(ebm_hyperparams["INNER_BAGS"]),
-                      "learning_rate": auto_cast_string(ebm_hyperparams["LEARNING_RATE"]),
-                      "early_stopping_rounds": auto_cast_string(ebm_hyperparams["EARLY_STOPPING_ROUNDS"]),
-                      "early_stopping_tolerance": auto_cast_string(ebm_hyperparams["EARLY_STOPPING_TOLERANCE"]),
-                      "max_rounds": auto_cast_string(ebm_hyperparams["MAX_ROUNDS"]),
-                      "min_samples_leaf": auto_cast_string(ebm_hyperparams["MIN_SAMPLES_LEAF"]),
-                      "max_leaves": auto_cast_string(ebm_hyperparams["MAX_LEAVES"]),
-                      "n_jobs": auto_cast_string(ebm_hyperparams["N_JOBS"])}
+    ebm_param_grid = load_hyperparameters(ebm, ebm_hyperparams)
     # ebm_param_grid = {}     # TODO: reactivate parameter grids
 
     knn = KNeighborsClassifier()
     knn_hyperparams = config["KNN_hyperparameters"]
+    knn_param_grid = load_hyperparameters(knn, knn_hyperparams)
 
     # Set n_neighbors KNN parameter
-    if knn_hyperparams["N_NEIGHBORS"] == "adaptive":
-        n_neighbors = [int(val) for val in np.round(np.sqrt(x.shape[1])) + np.arange(5) + 1] +\
-                      [int(val) for val in np.round(np.sqrt(x.shape[1])) - np.arange(5) if val >= 1]
-    else:
-        n_neighbors = auto_cast_string(knn_hyperparams["N_NEIGHBORS"])
-
-    knn_param_grid = {"weights": auto_cast_string(knn_hyperparams["WEIGHTS"]),
-                      "n_neighbors": n_neighbors,
-                      "p": auto_cast_string(knn_hyperparams["P"])}
+    if knn_param_grid["n_neighbors"] == ["adaptive"]:
+        knn_param_grid["n_neighbors"] = [int(val) for val in np.round(np.sqrt(x.shape[1])) + np.arange(5) + 1] +\
+                                        [int(val) for val in np.round(np.sqrt(x.shape[1])) - np.arange(5) if val >= 1]
     # knn_param_grid = {}
 
     dt = DecisionTreeClassifier()
     dt_hyperparams = config["DT_hyperparameters"]
-    dt_param_grid = {"splitter": auto_cast_string(dt_hyperparams["SPLITTER"]),
-                     "max_depth": auto_cast_string(dt_hyperparams["MAX_DEPTH"]),
-                     "min_samples_split": auto_cast_string(dt_hyperparams["MIN_SAMPLES_SPLIT"]),
-                     "min_samples_leaf": auto_cast_string(dt_hyperparams["MIN_SAMPLES_LEAF"]),
-                     "max_features": auto_cast_string(dt_hyperparams["MAX_FEATURES"])}
+    dt_param_grid = load_hyperparameters(dt, dt_hyperparams)
     # dt_param_grid = {}
 
     nn = MLPClassifier()
     nn_hyperparams = config["NN_hyperparameters"]
-    nn_param_grid = {"hidden_layer_sizes": auto_cast_string(nn_hyperparams["HIDDEN_LAYER_SIZES"]),
-                     "early_stopping": auto_cast_string(nn_hyperparams["EARLY_STOPPING"]),
-                     "n_iter_no_change": auto_cast_string(nn_hyperparams["N_ITER_NO_CHANGE"]),
-                     "max_iter": auto_cast_string(nn_hyperparams["MAX_ITER"]),
-                     "activation": auto_cast_string(nn_hyperparams["ACTIVATION"]),
-                     "solver": auto_cast_string(nn_hyperparams["SOLVER"]),
-                     "learning_rate_init": auto_cast_string(nn_hyperparams["LEARNING_RATE_INIT"])}
-    nn_param_grid = {}
+    nn_param_grid = load_hyperparameters(nn, nn_hyperparams)
+    # nn_param_grid = {}
 
     rf = RandomForestClassifier()
     rf_hyperparams = config["RF_hyperparameters"]
-    rf_param_grid = {"criterion": auto_cast_string(rf_hyperparams["CRITERION"]),
-                     "n_estimators": auto_cast_string(rf_hyperparams["N_ESTIMATORS"]),
-                     "max_depth": auto_cast_string(rf_hyperparams["MAX_DEPTH"]),
-                     "min_samples_split": auto_cast_string(rf_hyperparams["MIN_SAMPLES_SPLIT"]),
-                     "min_samples_leaf": auto_cast_string(rf_hyperparams["MIN_SAMPLES_LEAF"]),
-                     "max_features": auto_cast_string(rf_hyperparams["MAX_FEATURES"])}
+    rf_param_grid = load_hyperparameters(rf, rf_hyperparams)
     # rf_param_grid = {}
 
     xgb = XGBClassifier()
     xgb_hyperparams = config["XGB_hyperparameters"]
-    xgb_param_grid = {"learning_rate": auto_cast_string(xgb_hyperparams["LEARNING_RATE"]),
-                      "max_depth": auto_cast_string(xgb_hyperparams["MAX_DEPTH"]),
-                      "min_child_weight": auto_cast_string(xgb_hyperparams["MIN_CHILD_WEIGHT"]),
-                      "gamma": auto_cast_string(xgb_hyperparams["GAMMA"]),
-                      "colsample_bytree": auto_cast_string(xgb_hyperparams["COLSAMPLE_BYTREE"])}
+    xgb_param_grid = load_hyperparameters(xgb, xgb_hyperparams)
     # xgb_param_grid = {}
 
     # Define available classifiers
@@ -400,8 +390,8 @@ def main():
             # Hyperparameter tuning and keep model trained with the best set of hyperparameters
             optimized_model = RandomizedSearchCV(model,
                                                  param_distributions=clfs[clf]["parameters"],
-                                                 cv=auto_cast_string(config["Training"]["RANDOMIZEDSEARCHCV_CV"])[0],
-                                                 n_iter=auto_cast_string(config["Training"]["RANDOMIZEDSEARCHCV_N_ITER"])[0],
+                                                 cv=auto_cast_string(config["Training"]["randomizedsearchcv_cv"])[0],
+                                                 n_iter=auto_cast_string(config["Training"]["randomizedsearchcv_n_iter"])[0],
                                                  scoring="roc_auc",
                                                  random_state=fold_index)
             optimized_model.fit(x_train, y_train)
@@ -456,7 +446,7 @@ def main():
 
             # Progressbar
             if verbose is True:
-                tqdm_bar.set_description(str(f"[Model training] Finished fold {fold_index+1} / {num_folds}"))
+                tqdm_bar.set_description(str(f"[Model training] Finished fold {fold_index} / {num_folds}"))
 
     # Initialize overall performance table
     overall_performances = pd.DataFrame(columns=["acc", "sns", "spc", "ppv", "npv", "bacc", "auc"],
@@ -543,16 +533,14 @@ def main():
         feature_names_selected = feature_names[selected_indices_preprocessed]
 
         # Add feature names enabling interpretability of output plots (only needed for some algorithms like ebm)
-        try:
+        if clf == "ebm":
             model.set_params(**{"feature_names": feature_names_selected})
-        except ValueError:
-            pass
 
         # Hyperparameter tuning for final model
         optimized_model = RandomizedSearchCV(model,
                                              param_distributions=clfs[clf]["parameters"],
-                                             cv=auto_cast_string(config["Training"]["RANDOMIZEDSEARCHCV_CV"])[0],
-                                             n_iter=auto_cast_string(config["Training"]["RANDOMIZEDSEARCHCV_N_ITER"])[0],
+                                             cv=auto_cast_string(config["Training"]["randomizedsearchcv_cv"])[0],
+                                             n_iter=auto_cast_string(config["Training"]["randomizedsearchcv_n_iter"])[0],
                                              scoring="roc_auc",
                                              random_state=seed)
         optimized_model.fit(x_preprocessed, y)
