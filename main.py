@@ -32,7 +32,7 @@ Template for binary classifications of tabular data including preprocessing
 # TODO: Add relevant output to log file in results
 
 Input data format specifications:
-    - As of now, a file path has to be supplied to the main function as string value for the variable "data_path";
+    - As of now, a file path has to be supplied to the main function as string value for the variable "input_data_path";
     - The file shall be a CSV file separated by a semicolon (;)
     - The file shall have a header, containing the attribute names and the label name
     - The file shall have an index column containing a unique identifier for each instance
@@ -43,6 +43,7 @@ Input data format specifications:
 import os
 import pickle
 import json
+import configparser
 
 import numpy as np
 import pandas as pd
@@ -85,26 +86,113 @@ def create_path_if_not_exist(path):
         os.makedirs(path)
 
 
-def main():
-    # Set hyperparameters
-    num_folds = 50
-    label_name = "1"
-    # label_name = "OS_histo36"
-    # label_name = "Malign"
-    perform_calibration = True
-    verbose = True
-    # classifiers_to_run = ["ebm", "dt", "knn", "nn", "rf", "xgb"]
-    classifiers_to_run = ["dt", "knn", "rf", "xgb"]
-    # classifiers_to_run = ["ebm"]
+def convert_str_to_container(string, container_type="tuple"):
+    """
+    Take string flanked with brackets and convert to container; contained elements will be auto cast;
+    output will be wrapped in a list
 
-    # Specify data location
-    # data_path = "/home/cspielvogel/DataStorage/Bone_scintigraphy/Data/umap_feats_pg.csv"
-    # data_path = r"Data/test_data.csv"
-    # data_path = r"C:\Users\cspielvogel\Downloads\fdb_multiomics_w_labels_all.csv"
-    data_path = r"Data/test_data.csv"
+    :param string: string which shall be converted
+    :param container_type: string indicating which container to use; options are "tuple" and "list"
+    :return: converted container object
+    """
+
+    if ", " not in string:
+        raise ValueError(f"{string} a list")
+
+    if container_type == "tuple":
+        brackets = ["(", ")"]
+    else:
+        brackets = ["[", "]"]
+
+    containers_to_be = string.split(brackets[1] + ", ")
+    containers_to_be = [val.replace(brackets[0], "").replace(brackets[1], "").split(", ") for val in containers_to_be]
+
+    container_objs = []
+    for container_to_be in containers_to_be:
+        if container_type == "tuple":
+            container_objs.append(tuple([estimate_type(val) for val in container_to_be]))
+        else:
+            container_objs.append([estimate_type(val) for val in container_to_be])
+
+    return container_objs
+
+
+def str_to_bool(s):
+    """Convert string to boolean"""
+
+    if s == "True" or s == "true":
+        return True
+    if s == "False" or s == "false":
+        return False
+    raise ValueError("Not Boolean Value!")
+
+
+def str_to_none(s):
+    """Convert string to None"""
+
+    if s == "None":
+        return None
+    raise ValueError("Not None Value!")
+
+
+def estimate_type(var):
+    """guesses the str representation of the variable"s type"""
+
+    # Return if not string in the first place
+    if not isinstance(var, str):
+        return var
+
+    # Guess string representation, defaults to string if others don't pass
+    for caster in (str_to_bool, int, float, str_to_none, convert_str_to_container, str):
+        try:
+            return caster(var)
+        except ValueError:
+            pass
+
+
+def auto_cast_string(string):
+    """
+    Automatic casting of elements within a container
+
+    CAVE: If string to be cast contains a container such as a list, this type must be homogeneous if multiple values
+    are included
+
+    :param string: String to be cast
+    :return: List containing the casted value(s)
+    """
+
+    casted = []
+
+    if string[0] == "(" and string[-1] == ")":
+        casted = convert_str_to_container(string, container_type="tuple")
+    elif string[0] == "[" and string[-1] == "]":
+        casted = convert_str_to_container(string, container_type="list")
+    else:
+        list_obj = string.split(", ")
+        for value in list_obj:
+            casted.append(estimate_type(value))
+
+    return casted
+
+
+def main():
+    # Get parameters from settings.ini file
+    settings_path = "settings.ini"
+
+    config = configparser.ConfigParser()
+    config.read(settings_path)
+
+    verbose = config["Display"]["VERBOSE"] == "True"
+    input_data_path = config["Data"]["INPUT_DATA_FILE_PATH"]
+    input_file_separator = config["Data"]["INPUT_DATA_FILE_SEPARATOR"]
+    output_path = config["Data"]["OUTPUT_DATA_FOLDER_PATH"]
+    label_name = config["Data"]["LABEL_COLUMN_NAME"]
+    perform_eda = config["EDA"]["PERFORM_EDA"] == "True"
+    perform_calibration = config["Calibration"]["PERFORM_CALIBRATION"] == "True"
+    num_folds = int(config["Training"]["NUMBER_OF_FOLDS"])
+    classifiers_to_run = config["Classifiers"]["CLASSIFIERS_TO_RUN"].split(", ")
 
     # Set output paths
-    output_path = r"./Tmp_hyperparam-opt"
     eda_result_path = os.path.join(output_path, r"Results/EDA/")
     explainability_result_path = os.path.join(output_path, r"Results/XAI/")
     model_result_path = os.path.join(output_path, r"Results/Models/")
@@ -118,15 +206,16 @@ def main():
         create_path_if_not_exist(path)
 
     # Load data to table
-    df = pd.read_csv(data_path, sep=";", index_col=0)
+    df = pd.read_csv(input_data_path, sep=input_file_separator, index_col=0)
 
-    # # Perform EDA and save results
-    # run_eda(features=df.drop(label_name, axis="columns"),
-    #         labels=df[label_name],
-    #         label_column=label_name,
-    #         save_path=eda_result_path,
-    #         analyses_to_run=["pandas_profiling"],
-    #         verbose=verbose)
+    if perform_eda is True:
+        # Perform EDA and save results
+        run_eda(features=df.drop(label_name, axis="columns"),
+                labels=df[label_name],
+                label_column=label_name,
+                save_path=eda_result_path,
+                analyses_to_run=["pandas_profiling"],
+                verbose=verbose)
 
     # Perform one hot encoding of categorical features before standard scaling in EDA visualizations
     categorical_mask = df.dtypes == object
@@ -140,13 +229,14 @@ def main():
                                                                        "label_encoder.pickle"))
     df = preprocessor.fit_transform(df)
 
-    # # Perform dimensionality reductions
-    # run_eda(features=df.drop(label_name, axis="columns"),
-    #         labels=df[label_name],
-    #         label_column=label_name,
-    #         save_path=eda_result_path,
-    #         analyses_to_run=["umap", "tsne", "pca"],
-    #         verbose=verbose)
+    if perform_eda is True:
+        # Perform dimensionality reductions
+        run_eda(features=df.drop(label_name, axis="columns"),
+                labels=df[label_name],
+                label_column=label_name,
+                save_path=eda_result_path,
+                analyses_to_run=["umap", "tsne", "pca"],
+                verbose=verbose)
 
     # Separate data into training and test
     y = df[label_name]
@@ -156,61 +246,74 @@ def main():
 
     # Setup classifiers and parameters grids
     ebm = ExplainableBoostingClassifier()
-    ebm_param_grid = {"max_bins": [256],
-                      "max_interaction_bins": [64],
-                      "binning": ["quantile"],
-                      "interactions": [15],
-                      "outer_bags": [8, 16],
-                      "inner_bags": [0, 8],
-                      "learning_rate": [0.001, 0.01],
-                      "early_stopping_rounds": [50],
-                      "early_stopping_tolerance": [0.0001],
-                      "max_rounds": [7500],
-                      "min_samples_leaf": [2, 4],
-                      "max_leaves": [3],
-                      "n_jobs": [10]}
-    ebm_param_grid = {}     # TODO: reactivate parameter grids
+    ebm_hyperparams = config["EBM_hyperparameters"]
+    ebm_param_grid = {"max_bins": auto_cast_string(ebm_hyperparams["MAX_BINS"]),
+                      "max_interaction_bins": auto_cast_string(ebm_hyperparams["MAX_INTERACTION_BINS"]),
+                      "binning": auto_cast_string(ebm_hyperparams["BINNING"]),
+                      "interactions": auto_cast_string(ebm_hyperparams["INTERACTIONS"]),
+                      "outer_bags": auto_cast_string(ebm_hyperparams["OUTER_BAGS"]),
+                      "inner_bags": auto_cast_string(ebm_hyperparams["INNER_BAGS"]),
+                      "learning_rate": auto_cast_string(ebm_hyperparams["LEARNING_RATE"]),
+                      "early_stopping_rounds": auto_cast_string(ebm_hyperparams["EARLY_STOPPING_ROUNDS"]),
+                      "early_stopping_tolerance": auto_cast_string(ebm_hyperparams["EARLY_STOPPING_TOLERANCE"]),
+                      "max_rounds": auto_cast_string(ebm_hyperparams["MAX_ROUNDS"]),
+                      "min_samples_leaf": auto_cast_string(ebm_hyperparams["MIN_SAMPLES_LEAF"]),
+                      "max_leaves": auto_cast_string(ebm_hyperparams["MAX_LEAVES"]),
+                      "n_jobs": auto_cast_string(ebm_hyperparams["N_JOBS"])}
+    # ebm_param_grid = {}     # TODO: reactivate parameter grids
 
     knn = KNeighborsClassifier()
-    knn_param_grid = {"weights": ["distance"],
-                      "n_neighbors": [int(val) for val in np.round(np.sqrt(x.shape[1])) + np.arange(5) + 1] +
-                                     [int(val) for val in np.round(np.sqrt(x.shape[1])) - np.arange(5) if val >= 1],
-                      "p": np.arange(1, 5)}
+    knn_hyperparams = config["KNN_hyperparameters"]
+
+    # Set n_neighbors KNN parameter
+    if knn_hyperparams["N_NEIGHBORS"] == "adaptive":
+        n_neighbors = [int(val) for val in np.round(np.sqrt(x.shape[1])) + np.arange(5) + 1] +\
+                      [int(val) for val in np.round(np.sqrt(x.shape[1])) - np.arange(5) if val >= 1]
+    else:
+        n_neighbors = auto_cast_string(knn_hyperparams["N_NEIGHBORS"])
+
+    knn_param_grid = {"weights": auto_cast_string(knn_hyperparams["WEIGHTS"]),
+                      "n_neighbors": n_neighbors,
+                      "p": auto_cast_string(knn_hyperparams["P"])}
     # knn_param_grid = {}
 
     dt = DecisionTreeClassifier()
-    dt_param_grid = {"splitter": ["best", "random"],
-                     "max_depth": np.arange(1, 20),
-                     "min_samples_split": [2, 4, 6],
-                     "min_samples_leaf": [1, 3, 5, 6],
-                     "max_features": ["auto", "sqrt", "log2"]}
+    dt_hyperparams = config["DT_hyperparameters"]
+    dt_param_grid = {"splitter": auto_cast_string(dt_hyperparams["SPLITTER"]),
+                     "max_depth": auto_cast_string(dt_hyperparams["MAX_DEPTH"]),
+                     "min_samples_split": auto_cast_string(dt_hyperparams["MIN_SAMPLES_SPLIT"]),
+                     "min_samples_leaf": auto_cast_string(dt_hyperparams["MIN_SAMPLES_LEAF"]),
+                     "max_features": auto_cast_string(dt_hyperparams["MAX_FEATURES"])}
     # dt_param_grid = {}
 
     nn = MLPClassifier()
-    nn_param_grid = {"hidden_layer_sizes": [(32, 64, 32)],
-                     "early_stopping": [True],
-                     "n_iter_no_change": [20],
-                     "max_iter": [1000],
-                     "activation": ["relu", "tanh", "logistic"],
-                     "solver": ["adam"],
-                     "learning_rate_init": [0.01, 0.001, 0.0001]}
+    nn_hyperparams = config["NN_hyperparameters"]
+    nn_param_grid = {"hidden_layer_sizes": auto_cast_string(nn_hyperparams["HIDDEN_LAYER_SIZES"]),
+                     "early_stopping": auto_cast_string(nn_hyperparams["EARLY_STOPPING"]),
+                     "n_iter_no_change": auto_cast_string(nn_hyperparams["N_ITER_NO_CHANGE"]),
+                     "max_iter": auto_cast_string(nn_hyperparams["MAX_ITER"]),
+                     "activation": auto_cast_string(nn_hyperparams["ACTIVATION"]),
+                     "solver": auto_cast_string(nn_hyperparams["SOLVER"]),
+                     "learning_rate_init": auto_cast_string(nn_hyperparams["LEARNING_RATE_INIT"])}
     nn_param_grid = {}
 
     rf = RandomForestClassifier()
-    rf_param_grid = {"criterion": ["entropy"],
-                     "n_estimators": [500],
-                     "max_depth": np.arange(1, 20),
-                     "min_samples_split": [2, 4, 6],
-                     "min_samples_leaf": [1, 3, 5, 6],
-                     "max_features": ["auto", "sqrt", "log2"]}
+    rf_hyperparams = config["RF_hyperparameters"]
+    rf_param_grid = {"criterion": auto_cast_string(rf_hyperparams["CRITERION"]),
+                     "n_estimators": auto_cast_string(rf_hyperparams["N_ESTIMATORS"]),
+                     "max_depth": auto_cast_string(rf_hyperparams["MAX_DEPTH"]),
+                     "min_samples_split": auto_cast_string(rf_hyperparams["MIN_SAMPLES_SPLIT"]),
+                     "min_samples_leaf": auto_cast_string(rf_hyperparams["MIN_SAMPLES_LEAF"]),
+                     "max_features": auto_cast_string(rf_hyperparams["MAX_FEATURES"])}
     # rf_param_grid = {}
 
     xgb = XGBClassifier()
-    xgb_param_grid = {"learning_rate": [0.20, 0.30],
-                      "max_depth": [4, 6, 8],
-                      "min_child_weight": [1, 3],
-                      "gamma": [0.0, 0.2],
-                      "colsample_bytree": [0.5, 0.7, 1.0]}
+    xgb_hyperparams = config["XGB_hyperparameters"]
+    xgb_param_grid = {"learning_rate": auto_cast_string(xgb_hyperparams["LEARNING_RATE"]),
+                      "max_depth": auto_cast_string(xgb_hyperparams["MAX_DEPTH"]),
+                      "min_child_weight": auto_cast_string(xgb_hyperparams["MIN_CHILD_WEIGHT"]),
+                      "gamma": auto_cast_string(xgb_hyperparams["GAMMA"]),
+                      "colsample_bytree": auto_cast_string(xgb_hyperparams["COLSAMPLE_BYTREE"])}
     # xgb_param_grid = {}
 
     # Define available classifiers
@@ -297,8 +400,8 @@ def main():
             # Hyperparameter tuning and keep model trained with the best set of hyperparameters
             optimized_model = RandomizedSearchCV(model,
                                                  param_distributions=clfs[clf]["parameters"],
-                                                 cv=10,
-                                                 n_iter=25,
+                                                 cv=auto_cast_string(config["Training"]["RANDOMIZEDSEARCHCV_CV"])[0],
+                                                 n_iter=auto_cast_string(config["Training"]["RANDOMIZEDSEARCHCV_N_ITER"])[0],
                                                  scoring="roc_auc",
                                                  random_state=fold_index)
             optimized_model.fit(x_train, y_train)
@@ -448,7 +551,8 @@ def main():
         # Hyperparameter tuning for final model
         optimized_model = RandomizedSearchCV(model,
                                              param_distributions=clfs[clf]["parameters"],
-                                             cv=10,
+                                             cv=auto_cast_string(config["Training"]["RANDOMIZEDSEARCHCV_CV"])[0],
+                                             n_iter=auto_cast_string(config["Training"]["RANDOMIZEDSEARCHCV_N_ITER"])[0],
                                              scoring="roc_auc",
                                              random_state=seed)
         optimized_model.fit(x_preprocessed, y)
