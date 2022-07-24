@@ -196,8 +196,12 @@ def load_hyperparameters(model, config):
     # Iterate over each parameter
     for param in params:
 
-        # Cast each string parameter to the most reasonable type
-        param_grid[param] = auto_cast_string(config[param])
+        try:
+            # Cast each string parameter from config file to the most reasonable type
+            param_grid[param] = auto_cast_string(config[param])
+        except KeyError:
+            # Set parameter to default if missing in config file
+            param_grid[param] = [model.get_params()[param]]
 
     return param_grid
 
