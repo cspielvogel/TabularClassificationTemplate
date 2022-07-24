@@ -30,7 +30,6 @@ Template for binary classifications of tabular data including preprocessing
 # TODO: Check why some classifiers don't have the same number of measurements for the original models calibration curve
 # TODO: Add Brier scores to output for calibration
 # TODO: Add relevant output to log file in results
-# TODO: Add all possible classifier hyperparameters to settings.ini file
 # TODO: Add SVM classifier
 # TODO: Add options in settings to allow to switch on/off components such as individual XAI features, PCA, tSNE, etc
 
@@ -273,74 +272,36 @@ def main():
     y = df[label_name]
     x = df.drop(label_name, axis="columns")
 
+    # Get data characteristics
     feature_names = x.columns
+    num_classes = len(np.unique(y))
 
-    # Setup classifiers and parameters grids
-    ebm = ExplainableBoostingClassifier()
-    ebm_hyperparams = config["EBM_hyperparameters"]
-    ebm_param_grid = load_hyperparameters(ebm, ebm_hyperparams)
-    # ebm_param_grid = {}     # TODO: reactivate parameter grids
+    # # Set n_neighbors KNN parameter
+    # if knn_param_grid["n_neighbors"] == ["adaptive"]:
+    #     knn_param_grid["n_neighbors"] = [int(val) for val in np.round(np.sqrt(x.shape[1])) + np.arange(5) + 1] +\
+    #                                     [int(val) for val in np.round(np.sqrt(x.shape[1])) - np.arange(5) if val >= 1]
 
-    knn = KNeighborsClassifier()
-    knn_hyperparams = config["KNN_hyperparameters"]
-    knn_param_grid = load_hyperparameters(knn, knn_hyperparams)
+    # Initialize classifiers
+    initialized_classifiers = {"ebm": ExplainableBoostingClassifier(),
+                               "knn": KNeighborsClassifier(),
+                               "dt": DecisionTreeClassifier(),
+                               "nn": MLPClassifier(),
+                               "rf": RandomForestClassifier(),
+                               "xgb": XGBClassifier()}
 
-    # Set n_neighbors KNN parameter
-    if knn_param_grid["n_neighbors"] == ["adaptive"]:
-        knn_param_grid["n_neighbors"] = [int(val) for val in np.round(np.sqrt(x.shape[1])) + np.arange(5) + 1] +\
-                                        [int(val) for val in np.round(np.sqrt(x.shape[1])) - np.arange(5) if val >= 1]
-    # knn_param_grid = {}
-
-    dt = DecisionTreeClassifier()
-    dt_hyperparams = config["DT_hyperparameters"]
-    dt_param_grid = load_hyperparameters(dt, dt_hyperparams)
-    # dt_param_grid = {}
-
-    nn = MLPClassifier()
-    nn_hyperparams = config["NN_hyperparameters"]
-    nn_param_grid = load_hyperparameters(nn, nn_hyperparams)
-    # nn_param_grid = {}
-
-    rf = RandomForestClassifier()
-    rf_hyperparams = config["RF_hyperparameters"]
-    rf_param_grid = load_hyperparameters(rf, rf_hyperparams)
-    # rf_param_grid = {}
-
-    xgb = XGBClassifier()
-    xgb_hyperparams = config["XGB_hyperparameters"]
-    xgb_param_grid = load_hyperparameters(xgb, xgb_hyperparams)
-    # xgb_param_grid = {}
-
-    # Define available classifiers
-    available_clfs = {"ebm":
-                {"classifier": ebm,
-                 "parameters": ebm_param_grid},
-            "knn":
-                {"classifier": knn,
-                 "parameters": knn_param_grid},
-            "dt":
-                {"classifier": dt,
-                 "parameters": dt_param_grid},
-            "nn":
-                {"classifier": nn,
-                 "parameters": nn_param_grid},
-            "rf":
-                {"classifier": rf,
-                 "parameters": rf_param_grid},
-            "xgb":
-                {"classifier": xgb,
-                 "parameters": xgb_param_grid}}
+    # Connect classifier names, classifiers and hyperparameter grids
+    clfs = {}
+    for clf in classifiers_to_run:
+        model = initialized_classifiers[clf]
+        hyperparams = config[f"{clf.upper()}_hyperparameters"]
+        param_grid = load_hyperparameters(model, hyperparams)
+        clfs[clf] = {"classifier": model, "parameters": param_grid}
 
     # Add classifiers to run and initialize performance container holding each classifier performance for each fold fold
-    clfs = {}
     performance_clfwise_foldwise = {}
     for clf in classifiers_to_run:
-        clfs[clf] = available_clfs[clf]
         performance_clfwise_foldwise[clf] = {"acc": [], "sns": [], "spc": [], "ppv": [], "npv": [], "bacc": [],
                                              "auc": []}
-
-    # Get number of classes
-    num_classes = len(np.unique(y))
 
     # Initialize result table
     results = pd.DataFrame(index=classifiers_to_run)
