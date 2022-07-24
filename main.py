@@ -205,6 +205,65 @@ def load_hyperparameters(model, config):
     return param_grid
 
 
+class Model(object):
+    def __init__(self, model_name="model"):
+        self.model_name = model_name
+        self.estimator = None
+        self.hyperparameter_grid = None
+        self.setwise_performances = {"cm": None, "acc": [], "sns": [], "spc": [], "ppv": [], "npv": [], "bacc": [], "auc": []}
+        self.overall_performances = {}
+
+    def average_performances(self, round_digits=2):
+        """
+        Compute average performances over all self.setwise_performances and round
+
+        :param round_digits: int indicating the number of digits to round to
+        :return: dict mapping metric names to mean metrics
+        """
+
+        # Average non confusion matrix metrics
+        for metric_name in self.setwise_performances.keys():
+            if metric_name == "cm":
+                continue
+            mean_performance = np.mean(self.setwise_performances[metric_name])
+            self.overall_performances[metric_name] = np.round(mean_performance, round_digits)
+
+        # Sum confusion matrices
+        overall_cm = None
+        for matrix in self.setwise_performances["cm"]:
+            if overall_cm is None:
+                overall_cm = matrix
+            else:
+                overall_cm += matrix
+        self.overall_performances["cm"] = overall_cm
+
+        return self.overall_performances
+
+    def get_performances(self, y_pred, y_test):
+        """
+        Compute classification performance metrics and add them to self.setwise_performances
+
+        :param y_pred: np.ndarray 1D containing the predicted classes as integer
+        :param y_test: np.ndarray 1D containing the actural classes as integer
+        :return: dict containing performance metric name and value
+        """
+
+        if self.setwise_performances["cm"] is None:
+            # Initialize setwise confusion matrix
+            self.setwise_performances["cm"] = []
+
+        self.setwise_performances["cm"].append(confusion_matrix(y_test, y_pred))
+        self.setwise_performances["acc"].append(metrics.accuracy(y_test, y_pred))
+        self.setwise_performances["sns"].append(metrics.sensitivity(y_test, y_pred))
+        self.setwise_performances["spc"].append(metrics.specificity(y_test, y_pred))
+        self.setwise_performances["ppv"].append(metrics.positive_predictive_value(y_test, y_pred))
+        self.setwise_performances["npv"].append(metrics.negative_predictive_value(y_test, y_pred))
+        self.setwise_performances["bacc"].append(metrics.balanced_accuracy(y_test, y_pred))
+        self.setwise_performances["auc"].append(metrics.roc_auc(y_test, y_pred))
+
+        return {k: self.setwise_performances[k][-1] for k in self.setwise_performances.keys()}
+
+
 def main():
     # Get parameters from settings.ini file
     settings_path = "settings.ini"
@@ -289,22 +348,18 @@ def main():
                                "rf": RandomForestClassifier(),
                                "xgb": XGBClassifier()}
 
-    # Connect classifier names, classifiers and hyperparameter grids
+    # Create model objects for each classifier
     clfs = {}
     for clf in classifiers_to_run:
-        model = initialized_classifiers[clf]
+
+        # Initialize model object
+        clfs[clf] = Model(model_name=clf)
+        clfs[clf].estimator = initialized_classifiers[clf]
+
+        # Set hyperparameter grid
         hyperparams = config[f"{clf.upper()}_hyperparameters"]
-        param_grid = load_hyperparameters(model, hyperparams)
-        clfs[clf] = {"classifier": model, "parameters": param_grid}
-
-    # Add classifiers to run and initialize performance container holding each classifier performance for each fold fold
-    performance_clfwise_foldwise = {}
-    for clf in classifiers_to_run:
-        performance_clfwise_foldwise[clf] = {"acc": [], "sns": [], "spc": [], "ppv": [], "npv": [], "bacc": [],
-                                             "auc": []}
-
-    # Initialize result table
-    results = pd.DataFrame(index=classifiers_to_run)
+        param_grid = load_hyperparameters(clfs[clf].estimator, hyperparams)
+        clfs[clf].hyperparameter_grid = param_grid
 
     if verbose is True:
         print(f"[Model training] Starting model training")
@@ -346,16 +401,9 @@ def main():
         # Iterate over classifiers
         for clf in clfs:
 
-            # Initialize cumulated confusion matrix and fold-wise performance containers
-            cms = np.zeros((num_classes, num_classes))
-
-            # Setup model
-            model = clfs[clf]["classifier"]
-            model.random_state = fold_index
-
             # Hyperparameter tuning and keep model trained with the best set of hyperparameters
-            optimized_model = RandomizedSearchCV(model,
-                                                 param_distributions=clfs[clf]["parameters"],
+            optimized_model = RandomizedSearchCV(clfs[clf].estimator,
+                                                 param_distributions=clfs[clf].hyperparameter_grid,
                                                  cv=auto_cast_string(config["Training"]["randomizedsearchcv_cv"])[0],
                                                  n_iter=auto_cast_string(config["Training"]["randomizedsearchcv_n_iter"])[0],
                                                  scoring="roc_auc",
@@ -390,29 +438,12 @@ def main():
             raw_importances_foldwise_mean_val += raw_importances_val.importances_mean
             raw_importances_foldwise_std_val += raw_importances_val.importances_std
 
-            # Compute performance
-            cm = confusion_matrix(y_test, y_pred)
-            acc = metrics.accuracy(y_test, y_pred)
-            sns = metrics.sensitivity(y_test, y_pred)
-            spc = metrics.specificity(y_test, y_pred)
-            ppv = metrics.positive_predictive_value(y_test, y_pred)
-            npv = metrics.negative_predictive_value(y_test, y_pred)
-            bacc = metrics.balanced_accuracy(y_test, y_pred)
-            auc = metrics.roc_auc(y_test, y_pred)
-
-            # Append performance to fold-wise and overall containers
-            cms += cm
-            performance_clfwise_foldwise[clf]["acc"].append(acc)
-            performance_clfwise_foldwise[clf]["sns"].append(sns)
-            performance_clfwise_foldwise[clf]["spc"].append(spc)
-            performance_clfwise_foldwise[clf]["ppv"].append(ppv)
-            performance_clfwise_foldwise[clf]["npv"].append(npv)
-            performance_clfwise_foldwise[clf]["bacc"].append(bacc)
-            performance_clfwise_foldwise[clf]["auc"].append(auc)
+            # Compute and store performance metrics for fold
+            clfs[clf].get_performances(y_test, y_pred)
 
             # Progressbar
             if verbose is True:
-                tqdm_bar.set_description(str(f"[Model training] Finished fold {fold_index} / {num_folds}"))
+                tqdm_bar.set_description(str(f"[Model training] Finished folds: "))
 
     # Initialize overall performance table
     overall_performances = pd.DataFrame(columns=["acc", "sns", "spc", "ppv", "npv", "bacc", "auc"],
@@ -422,10 +453,13 @@ def main():
     for clf in clfs:
 
         # Calculate overall performance
-        for metric in performance_clfwise_foldwise[clf]:
-            performance_mean = np.mean(performance_clfwise_foldwise[clf][metric])
-            performance_mean_rounded = np.round(performance_mean, 2)
-            overall_performances.at[clf, metric] = performance_mean_rounded
+        for metric in clfs[clf].average_performances().keys():
+            if metric == "cm":
+                continue
+            overall_performances.at[clf, metric] = clfs[clf].average_performances()[metric]
+
+        # Get cumulative confusion matrix
+        cms = clfs[clf].overall_performances["cm"]
 
         # Display and save confusion matrix figure
         seaborn.heatmap(cms, annot=True, cmap="Blues", fmt="g")
@@ -466,9 +500,7 @@ def main():
     for clf in clfs:
 
         # Setup final model
-        seed = 0
-        model = clfs[clf]["classifier"]
-        model.random_state = seed
+        model = clfs[clf].estimator
 
         # Preprocess data for creation of final model
         intra_fold_preprocessor = TabularIntraFoldPreprocessor(k="automated",
@@ -504,11 +536,11 @@ def main():
 
         # Hyperparameter tuning for final model
         optimized_model = RandomizedSearchCV(model,
-                                             param_distributions=clfs[clf]["parameters"],
+                                             param_distributions=clfs[clf].hyperparameter_grid,
                                              cv=auto_cast_string(config["Training"]["randomizedsearchcv_cv"])[0],
                                              n_iter=auto_cast_string(config["Training"]["randomizedsearchcv_n_iter"])[0],
                                              scoring="roc_auc",
-                                             random_state=seed)
+                                             random_state=0)
         optimized_model.fit(x_preprocessed, y)
         best_params = optimized_model.best_params_
         optimized_model = optimized_model.best_estimator_
@@ -546,104 +578,104 @@ def main():
         overall_mean_importances_val = raw_importances_foldwise_mean_val / num_folds
         overall_std_importances_val = raw_importances_foldwise_std_val / num_folds
 
-        # # Plot feature importances as determined using training and validation data
-        # plot_title_permutation_importance = f"permutation_importance_{clf}"
-        # importances_save_path = os.path.join(explainability_result_path,
-        #                                      "Permutation_importances")
-        # create_path_if_not_exist(importances_save_path)
-        # train_importances_save_path = os.path.join(importances_save_path,
-        #                                            plot_title_permutation_importance + "-train")
-        # plot_importances(importances_mean=overall_mean_importances_train,
-        #                  importances_std=overall_std_importances_train,
-        #                  feature_names=feature_names_selected,
-        #                  plot_title=plot_title_permutation_importance + "-training_data",
-        #                  order_alphanumeric=True,
-        #                  include_top=0,
-        #                  display_plots=False,
-        #                  save_path=train_importances_save_path)
-        #
-        # test_importances_save_path = os.path.join(importances_save_path,
-        #                                           plot_title_permutation_importance + "-test")
-        # plot_importances(importances_mean=overall_mean_importances_val,
-        #                  importances_std=overall_std_importances_val,
-        #                  feature_names=feature_names_selected,
-        #                  plot_title=plot_title_permutation_importance + "-validation_data",
-        #                  order_alphanumeric=True,
-        #                  include_top=0,
-        #                  display_plots=False,
-        #                  save_path=test_importances_save_path)
-        #
-        # # Partial dependenced plots (DPD)
-        # pdp_save_path = os.path.join(explainability_result_path, "Partial_dependence_plots")
-        # create_path_if_not_exist(pdp_save_path)
-        # plot_partial_dependences(model=optimized_model,
-        #                          x=x_preprocessed,
-        #                          y=y,
-        #                          feature_names=feature_names_selected,
-        #                          clf_name=clf,
-        #                          save_path=pdp_save_path)
-        #
-        # # Create surrogate models
-        # if clf not in ["dt", "ebm"]:
-        #     surrogate_models_save_path = os.path.join(explainability_result_path, "Surrogate_models")
-        #     create_path_if_not_exist(surrogate_models_save_path)
-        #
-        #     # Decision tree surrogate model
-        #     dt_surrogate_models_save_path = os.path.join(surrogate_models_save_path,
-        #                                                  f"dt_surrogate_model_for-{clf}.pickle")
-        #     dt_surrogate_params = {     # TODO: allow customization
-        #         "max_depth": 3,
-        #         "min_samples_leaf": 3
-        #     }
-        #     dt_surrogate_model, _ = surrogate_model(opaque_model=optimized_model,
-        #                                             features=x_preprocessed,
-        #                                             params=dt_surrogate_params,
-        #                                             surrogate_type="dt",
-        #                                             save_path=dt_surrogate_models_save_path,
-        #                                             verbose=True)
-        #
-        #     # EBM surrogate model
-        #     ebm_surrogate_models_save_path = os.path.join(surrogate_models_save_path,
-        #                                                   f"ebm_surrogate_model_for-{clf}.pickle")
-        #     ebm_surrogate_params = {}
-        #     ebm_surrogate_model, _ = surrogate_model(opaque_model=optimized_model,
-        #                                              features=x_preprocessed,
-        #                                              params=ebm_surrogate_params,
-        #                                              surrogate_type="ebm",
-        #                                              save_path=ebm_surrogate_models_save_path,
-        #                                              verbose=True)
-        #
-        #     # Create and save surrogate tree visualization
-        #     dt_surrogate_model_visualization_save_path = os.path.join(surrogate_models_save_path,
-        #                                                               f"dt_surrogate_model_for-{clf}.svg")
-        #     int_label_names = [label for label in dt_surrogate_model.classes_]
-        #     if preprocessor.label_encoder != None:
-        #         decoded_class_names = list(preprocessor.label_encoder.inverse_transform(int_label_names))
-        #     else:
-        #         decoded_class_names = int_label_names
-        #
-        #     viz = dtreeviz(dt_surrogate_model, x_preprocessed, y,
-        #                    target_name="Label",
-        #                    feature_names=feature_names_selected,
-        #                    class_names=decoded_class_names)
-        #     viz.save(dt_surrogate_model_visualization_save_path)
-        #
-        # # SHAP analysis and plotting
-        # shap_save_path = os.path.join(explainability_result_path, "SHAP")
-        # create_path_if_not_exist(shap_save_path)
-        # if preprocessor.label_encoder != None:
-        #     decoded_class_names = list(preprocessor.label_encoder.inverse_transform(optimized_model.classes_))
-        # else:
-        #     decoded_class_names = optimized_model.classes_
-        #
-        # plot_shap_features(model=optimized_model,
-        #                    x=x_preprocessed,
-        #                    feature_names=feature_names_selected,
-        #                    index_names=x_preprocessed_df.index,
-        #                    clf_name=clf,
-        #                    classes=decoded_class_names,
-        #                    save_path=shap_save_path,
-        #                    verbose=True)
+        # Plot feature importances as determined using training and validation data
+        plot_title_permutation_importance = f"permutation_importance_{clf}"
+        importances_save_path = os.path.join(explainability_result_path,
+                                             "Permutation_importances")
+        create_path_if_not_exist(importances_save_path)
+        train_importances_save_path = os.path.join(importances_save_path,
+                                                   plot_title_permutation_importance + "-train")
+        plot_importances(importances_mean=overall_mean_importances_train,
+                         importances_std=overall_std_importances_train,
+                         feature_names=feature_names_selected,
+                         plot_title=plot_title_permutation_importance + "-training_data",
+                         order_alphanumeric=True,
+                         include_top=0,
+                         display_plots=False,
+                         save_path=train_importances_save_path)
+
+        test_importances_save_path = os.path.join(importances_save_path,
+                                                  plot_title_permutation_importance + "-test")
+        plot_importances(importances_mean=overall_mean_importances_val,
+                         importances_std=overall_std_importances_val,
+                         feature_names=feature_names_selected,
+                         plot_title=plot_title_permutation_importance + "-validation_data",
+                         order_alphanumeric=True,
+                         include_top=0,
+                         display_plots=False,
+                         save_path=test_importances_save_path)
+
+        # Partial dependenced plots (DPD)
+        pdp_save_path = os.path.join(explainability_result_path, "Partial_dependence_plots")
+        create_path_if_not_exist(pdp_save_path)
+        plot_partial_dependences(model=optimized_model,
+                                 x=x_preprocessed,
+                                 y=y,
+                                 feature_names=feature_names_selected,
+                                 clf_name=clf,
+                                 save_path=pdp_save_path)
+
+        # Create surrogate models
+        if clf not in ["dt", "ebm"]:
+            surrogate_models_save_path = os.path.join(explainability_result_path, "Surrogate_models")
+            create_path_if_not_exist(surrogate_models_save_path)
+
+            # Decision tree surrogate model
+            dt_surrogate_models_save_path = os.path.join(surrogate_models_save_path,
+                                                         f"dt_surrogate_model_for-{clf}.pickle")
+            dt_surrogate_params = {     # TODO: allow customization
+                "max_depth": 3,
+                "min_samples_leaf": 3
+            }
+            dt_surrogate_model, _ = surrogate_model(opaque_model=optimized_model,
+                                                    features=x_preprocessed,
+                                                    params=dt_surrogate_params,
+                                                    surrogate_type="dt",
+                                                    save_path=dt_surrogate_models_save_path,
+                                                    verbose=True)
+
+            # EBM surrogate model
+            ebm_surrogate_models_save_path = os.path.join(surrogate_models_save_path,
+                                                          f"ebm_surrogate_model_for-{clf}.pickle")
+            ebm_surrogate_params = {}
+            ebm_surrogate_model, _ = surrogate_model(opaque_model=optimized_model,
+                                                     features=x_preprocessed,
+                                                     params=ebm_surrogate_params,
+                                                     surrogate_type="ebm",
+                                                     save_path=ebm_surrogate_models_save_path,
+                                                     verbose=True)
+
+            # Create and save surrogate tree visualization
+            dt_surrogate_model_visualization_save_path = os.path.join(surrogate_models_save_path,
+                                                                      f"dt_surrogate_model_for-{clf}.svg")
+            int_label_names = [label for label in dt_surrogate_model.classes_]
+            if preprocessor.label_encoder is not None:
+                decoded_class_names = list(preprocessor.label_encoder.inverse_transform(int_label_names))
+            else:
+                decoded_class_names = int_label_names
+
+            viz = dtreeviz(dt_surrogate_model, x_preprocessed, y,
+                           target_name="Label",
+                           feature_names=feature_names_selected,
+                           class_names=decoded_class_names)
+            viz.save(dt_surrogate_model_visualization_save_path)
+
+        # SHAP analysis and plotting
+        shap_save_path = os.path.join(explainability_result_path, "SHAP")
+        create_path_if_not_exist(shap_save_path)
+        if preprocessor.label_encoder is not None:
+            decoded_class_names = list(preprocessor.label_encoder.inverse_transform(optimized_model.classes_))
+        else:
+            decoded_class_names = optimized_model.classes_
+
+        plot_shap_features(model=optimized_model,
+                           x=x_preprocessed,
+                           feature_names=feature_names_selected,
+                           index_names=x_preprocessed_df.index,
+                           clf_name=clf,
+                           classes=decoded_class_names,
+                           save_path=shap_save_path,
+                           verbose=True)
 
 
 if __name__ == "__main__":
