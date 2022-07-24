@@ -32,6 +32,7 @@ Template for binary classifications of tabular data including preprocessing
 # TODO: Add relevant output to log file in results
 # TODO: Add all possible classifier hyperparameters to settings.ini file
 # TODO: Add SVM classifier
+# TODO: Add options in settings to allow to switch on/off components such as individual XAI features, PCA, tSNE, etc
 
 Input data format specifications:
     - As of now, a file path has to be supplied to the main function as string value for the variable "input_data_path";
