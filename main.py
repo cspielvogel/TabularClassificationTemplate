@@ -499,7 +499,7 @@ def main():
                                             "std_train": raw_importances_train.importances_std,
                                             "mean_val": raw_importances_val.importances_mean,
                                             "std_val": raw_importances_val.importances_std}
-            else:
+            elif perform_permutation_importance:
                 # Add importance scores to overall container
                 raw_importances_foldwise["mean_train"] += raw_importances_train.importances_mean
                 raw_importances_foldwise["std_train"] += raw_importances_train.importances_std
@@ -671,10 +671,12 @@ def main():
                 # Decision tree surrogate model
                 dt_surrogate_models_save_path = os.path.join(surrogate_models_save_path,
                                                              f"dt_surrogate_model_for-{clf}.pickle")
-                dt_surrogate_params = {     # TODO: allow customization
-                    "max_depth": 3,
-                    "min_samples_leaf": 3
-                }
+
+                # Use dummy classifier to load parameter grid
+                dt_surrogate_params = load_hyperparameters(DecisionTreeClassifier(),
+                                                           config["Surrogate_DT_hyperparameters"])
+                dt_surrogate_params = {k: dt_surrogate_params[k][0] for k in dt_surrogate_params}
+
                 dt_surrogate_model, _ = surrogate_model(opaque_model=optimized_model,
                                                         features=x_preprocessed,
                                                         params=dt_surrogate_params,
@@ -685,7 +687,12 @@ def main():
                 # EBM surrogate model
                 ebm_surrogate_models_save_path = os.path.join(surrogate_models_save_path,
                                                               f"ebm_surrogate_model_for-{clf}.pickle")
-                ebm_surrogate_params = {}
+
+                # Use dummy classifier to load parameter grid and remove list wrapping
+                ebm_surrogate_params = load_hyperparameters(ExplainableBoostingClassifier(),
+                                                            config["Surrogate_EBM_hyperparameters"])
+                ebm_surrogate_params = {k: ebm_surrogate_params[k][0] for k in ebm_surrogate_params}
+
                 ebm_surrogate_model, _ = surrogate_model(opaque_model=optimized_model,
                                                          features=x_preprocessed,
                                                          params=ebm_surrogate_params,
