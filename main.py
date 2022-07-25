@@ -30,8 +30,6 @@ Template for binary classifications of tabular data including preprocessing
 # TODO: Check why some classifiers don't have the same number of measurements for the original models calibration curve
 # TODO: Add Brier scores to output for calibration
 # TODO: Add relevant output to log file in results
-# TODO: Add SVM classifier
-# TODO: Add options in settings to allow to switch on/off components such as individual XAI features, PCA, tSNE, etc
 
 Input data format specifications:
     - As of now, a file path has to be supplied to the main function as string value for the variable "input_data_path";
@@ -57,6 +55,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.tree import DecisionTreeClassifier
+from sklearn.svm import SVC
 from sklearn.model_selection import train_test_split, RandomizedSearchCV
 from sklearn.metrics import accuracy_score, confusion_matrix
 from sklearn.feature_selection import f_classif
@@ -362,7 +361,8 @@ def main():
                                "dt": DecisionTreeClassifier(),
                                "nn": MLPClassifier(),
                                "rf": RandomForestClassifier(),
-                               "xgb": XGBClassifier()}
+                               "xgb": XGBClassifier(),
+                               "svm": SVC()}
 
     # Create model objects for each classifier
     clfs = {}
@@ -494,9 +494,10 @@ def main():
         cm_df.to_csv(os.path.join(performance_result_path, f"confusion_matrix-{clf}.csv"), sep=";")
 
     # Save result table with all classifiers performances
-    colors = ["dimgray", "gray", "darkgray", "lightgray", "gainsboro", "whitesmoke", "maroon"]
+    colors = ["dimgray", "gray", "darkgray", "silver", "lightgray", "gainsboro", "maroon"]
     overall_performances.to_csv(os.path.join(performance_result_path, "performances.csv"), sep=";")
-    overall_performances.plot.bar(rot=45, color=colors).legend(loc="upper right")
+    overall_performances.plot.bar(rot=45, color=colors, figsize=(len(classifiers_to_run) * 1.5, 7))\
+        .legend(loc="upper right")
 
     if verbose is True:
         print("[Results] Displaying performance")
