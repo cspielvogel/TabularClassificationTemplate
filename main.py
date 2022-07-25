@@ -276,10 +276,17 @@ def main():
     input_file_separator = config["Data"]["input_data_file_separator"]
     output_path = config["Data"]["output_data_folder_path"]
     label_name = config["Data"]["label_column_name"]
-    perform_eda = config["EDA"]["perform_eda"] == "True"
-    perform_calibration = config["Calibration"]["perform_calibration"] == "True"
     num_folds = int(config["Training"]["number_of_folds"])
     classifiers_to_run = config["Classifiers"]["classifiers_to_run"].split(", ")
+    perform_reporting = config["EDA"]["perform_reporting"] == "True"
+    perform_umap = config["EDA"]["perform_umap"] == "True"
+    perform_tsne = config["EDA"]["perform_tsne"] == "True"
+    perform_pca = config["EDA"]["perform_pca"] == "True"
+    perform_calibration = config["Calibration"]["perform_calibration"] == "True"
+    perform_permutation_importance = config["XAI"]["perform_permutation_importance"] == "True"
+    perform_shap = config["XAI"]["perform_shap"] == "True"
+    perform_surrogate_modeling = config["XAI"]["perform_surrogate_modeling"] == "True"
+    perform_partial_dependence_plotting = config["XAI"]["perform_partial_dependence_plotting"] == "True"
 
     # Set output paths
     eda_result_path = os.path.join(output_path, r"Results/EDA/")
@@ -297,7 +304,7 @@ def main():
     # Load data to table
     df = pd.read_csv(input_data_path, sep=input_file_separator, index_col=0)
 
-    if perform_eda is True:
+    if perform_reporting is True:
         # Perform EDA and save results
         run_eda(features=df.drop(label_name, axis="columns"),
                 labels=df[label_name],
@@ -318,13 +325,22 @@ def main():
                                                                        "label_encoder.pickle"))
     df = preprocessor.fit_transform(df)
 
-    if perform_eda is True:
+    # Obtain dimensionality reduction techniques to be run from config
+    dimensionality_reductions_to_run = []
+    if perform_umap is True:
+        dimensionality_reductions_to_run.append("umap")
+    if perform_tsne is True:
+        dimensionality_reductions_to_run.append("tsne")
+    if perform_pca is True:
+        dimensionality_reductions_to_run.append("pca")
+
+    if dimensionality_reductions_to_run:
         # Perform dimensionality reductions
         run_eda(features=df.drop(label_name, axis="columns"),
                 labels=df[label_name],
                 label_column=label_name,
                 save_path=eda_result_path,
-                analyses_to_run=["umap", "tsne", "pca"],
+                analyses_to_run=dimensionality_reductions_to_run,
                 verbose=verbose)
 
     # Separate data into training and test
@@ -426,17 +442,18 @@ def main():
                                                          random_state=fold_index)
 
             # Initialize fold-wise feature importance containers for mean and standard deviation with zero values
-            if "raw_importances_foldwise_mean_train" not in locals():
+            if perform_permutation_importance and "raw_importances_foldwise_mean_train" not in locals():
                 raw_importances_foldwise_mean_train = np.zeros((len(feature_names_selected),))
                 raw_importances_foldwise_std_train = np.zeros((len(feature_names_selected),))
                 raw_importances_foldwise_mean_val = np.zeros((len(feature_names_selected),))
                 raw_importances_foldwise_std_val = np.zeros((len(feature_names_selected),))
 
-            # Add importance scores to overall container
-            raw_importances_foldwise_mean_train += raw_importances_train.importances_mean
-            raw_importances_foldwise_std_train += raw_importances_train.importances_std
-            raw_importances_foldwise_mean_val += raw_importances_val.importances_mean
-            raw_importances_foldwise_std_val += raw_importances_val.importances_std
+            if perform_permutation_importance:
+                # Add importance scores to overall container
+                raw_importances_foldwise_mean_train += raw_importances_train.importances_mean
+                raw_importances_foldwise_std_train += raw_importances_train.importances_std
+                raw_importances_foldwise_mean_val += raw_importances_val.importances_mean
+                raw_importances_foldwise_std_val += raw_importances_val.importances_std
 
             # Compute and store performance metrics for fold
             clfs[clf].get_performances(y_test, y_pred)
@@ -572,110 +589,114 @@ def main():
 
             json.dump(param_dict_json_conform, file, indent=4)
 
-        # Get mean of feature importance scores and standard deviation over all folds
-        overall_mean_importances_train = raw_importances_foldwise_mean_train / num_folds
-        overall_std_importances_train = raw_importances_foldwise_std_train / num_folds
-        overall_mean_importances_val = raw_importances_foldwise_mean_val / num_folds
-        overall_std_importances_val = raw_importances_foldwise_std_val / num_folds
+        if perform_permutation_importance:
+            # Get mean of feature importance scores and standard deviation over all folds
+            overall_mean_importances_train = raw_importances_foldwise_mean_train / num_folds
+            overall_std_importances_train = raw_importances_foldwise_std_train / num_folds
+            overall_mean_importances_val = raw_importances_foldwise_mean_val / num_folds
+            overall_std_importances_val = raw_importances_foldwise_std_val / num_folds
 
-        # Plot feature importances as determined using training and validation data
-        plot_title_permutation_importance = f"permutation_importance_{clf}"
-        importances_save_path = os.path.join(explainability_result_path,
-                                             "Permutation_importances")
-        create_path_if_not_exist(importances_save_path)
-        train_importances_save_path = os.path.join(importances_save_path,
-                                                   plot_title_permutation_importance + "-train")
-        plot_importances(importances_mean=overall_mean_importances_train,
-                         importances_std=overall_std_importances_train,
-                         feature_names=feature_names_selected,
-                         plot_title=plot_title_permutation_importance + "-training_data",
-                         order_alphanumeric=True,
-                         include_top=0,
-                         display_plots=False,
-                         save_path=train_importances_save_path)
+            # Plot feature importances as determined using training and validation data
+            plot_title_permutation_importance = f"permutation_importance_{clf}"
+            importances_save_path = os.path.join(explainability_result_path,
+                                                 "Permutation_importances")
+            create_path_if_not_exist(importances_save_path)
+            train_importances_save_path = os.path.join(importances_save_path,
+                                                       plot_title_permutation_importance + "-train")
+            plot_importances(importances_mean=overall_mean_importances_train,
+                             importances_std=overall_std_importances_train,
+                             feature_names=feature_names_selected,
+                             plot_title=plot_title_permutation_importance + "-training_data",
+                             order_alphanumeric=True,
+                             include_top=0,
+                             display_plots=False,
+                             save_path=train_importances_save_path)
 
-        test_importances_save_path = os.path.join(importances_save_path,
-                                                  plot_title_permutation_importance + "-test")
-        plot_importances(importances_mean=overall_mean_importances_val,
-                         importances_std=overall_std_importances_val,
-                         feature_names=feature_names_selected,
-                         plot_title=plot_title_permutation_importance + "-validation_data",
-                         order_alphanumeric=True,
-                         include_top=0,
-                         display_plots=False,
-                         save_path=test_importances_save_path)
+            test_importances_save_path = os.path.join(importances_save_path,
+                                                      plot_title_permutation_importance + "-test")
+            plot_importances(importances_mean=overall_mean_importances_val,
+                             importances_std=overall_std_importances_val,
+                             feature_names=feature_names_selected,
+                             plot_title=plot_title_permutation_importance + "-validation_data",
+                             order_alphanumeric=True,
+                             include_top=0,
+                             display_plots=False,
+                             save_path=test_importances_save_path)
 
-        # Partial dependenced plots (DPD)
-        pdp_save_path = os.path.join(explainability_result_path, "Partial_dependence_plots")
-        create_path_if_not_exist(pdp_save_path)
-        plot_partial_dependences(model=optimized_model,
-                                 x=x_preprocessed,
-                                 y=y,
-                                 feature_names=feature_names_selected,
-                                 clf_name=clf,
-                                 save_path=pdp_save_path)
+        if perform_partial_dependence_plotting:
+            # Partial dependenced plots (DPD)
+            pdp_save_path = os.path.join(explainability_result_path, "Partial_dependence_plots")
+            create_path_if_not_exist(pdp_save_path)
+            plot_partial_dependences(model=optimized_model,
+                                     x=x_preprocessed,
+                                     y=y,
+                                     feature_names=feature_names_selected,
+                                     clf_name=clf,
+                                     save_path=pdp_save_path)
 
-        # Create surrogate models
-        if clf not in ["dt", "ebm"]:
-            surrogate_models_save_path = os.path.join(explainability_result_path, "Surrogate_models")
-            create_path_if_not_exist(surrogate_models_save_path)
+        if perform_surrogate_modeling:
+            # Create surrogate models
+            if clf not in ["dt", "ebm"]:
+                surrogate_models_save_path = os.path.join(explainability_result_path, "Surrogate_models")
+                create_path_if_not_exist(surrogate_models_save_path)
 
-            # Decision tree surrogate model
-            dt_surrogate_models_save_path = os.path.join(surrogate_models_save_path,
-                                                         f"dt_surrogate_model_for-{clf}.pickle")
-            dt_surrogate_params = {     # TODO: allow customization
-                "max_depth": 3,
-                "min_samples_leaf": 3
-            }
-            dt_surrogate_model, _ = surrogate_model(opaque_model=optimized_model,
-                                                    features=x_preprocessed,
-                                                    params=dt_surrogate_params,
-                                                    surrogate_type="dt",
-                                                    save_path=dt_surrogate_models_save_path,
-                                                    verbose=True)
+                # Decision tree surrogate model
+                dt_surrogate_models_save_path = os.path.join(surrogate_models_save_path,
+                                                             f"dt_surrogate_model_for-{clf}.pickle")
+                dt_surrogate_params = {     # TODO: allow customization
+                    "max_depth": 3,
+                    "min_samples_leaf": 3
+                }
+                dt_surrogate_model, _ = surrogate_model(opaque_model=optimized_model,
+                                                        features=x_preprocessed,
+                                                        params=dt_surrogate_params,
+                                                        surrogate_type="dt",
+                                                        save_path=dt_surrogate_models_save_path,
+                                                        verbose=True)
 
-            # EBM surrogate model
-            ebm_surrogate_models_save_path = os.path.join(surrogate_models_save_path,
-                                                          f"ebm_surrogate_model_for-{clf}.pickle")
-            ebm_surrogate_params = {}
-            ebm_surrogate_model, _ = surrogate_model(opaque_model=optimized_model,
-                                                     features=x_preprocessed,
-                                                     params=ebm_surrogate_params,
-                                                     surrogate_type="ebm",
-                                                     save_path=ebm_surrogate_models_save_path,
-                                                     verbose=True)
+                # EBM surrogate model
+                ebm_surrogate_models_save_path = os.path.join(surrogate_models_save_path,
+                                                              f"ebm_surrogate_model_for-{clf}.pickle")
+                ebm_surrogate_params = {}
+                ebm_surrogate_model, _ = surrogate_model(opaque_model=optimized_model,
+                                                         features=x_preprocessed,
+                                                         params=ebm_surrogate_params,
+                                                         surrogate_type="ebm",
+                                                         save_path=ebm_surrogate_models_save_path,
+                                                         verbose=True)
 
-            # Create and save surrogate tree visualization
-            dt_surrogate_model_visualization_save_path = os.path.join(surrogate_models_save_path,
-                                                                      f"dt_surrogate_model_for-{clf}.svg")
-            int_label_names = [label for label in dt_surrogate_model.classes_]
+                # Create and save surrogate tree visualization
+                dt_surrogate_model_visualization_save_path = os.path.join(surrogate_models_save_path,
+                                                                          f"dt_surrogate_model_for-{clf}.svg")
+                int_label_names = [label for label in dt_surrogate_model.classes_]
+                if preprocessor.label_encoder is not None:
+                    decoded_class_names = list(preprocessor.label_encoder.inverse_transform(int_label_names))
+                else:
+                    decoded_class_names = int_label_names
+
+                viz = dtreeviz(dt_surrogate_model, x_preprocessed, y,
+                               target_name="Label",
+                               feature_names=feature_names_selected,
+                               class_names=decoded_class_names)
+                viz.save(dt_surrogate_model_visualization_save_path)
+
+        if perform_shap:
+            # SHAP analysis and plotting
+            shap_save_path = os.path.join(explainability_result_path, "SHAP")
+            create_path_if_not_exist(shap_save_path)
             if preprocessor.label_encoder is not None:
-                decoded_class_names = list(preprocessor.label_encoder.inverse_transform(int_label_names))
+                decoded_class_names = list(preprocessor.label_encoder.inverse_transform(optimized_model.classes_))
             else:
-                decoded_class_names = int_label_names
+                decoded_class_names = optimized_model.classes_
 
-            viz = dtreeviz(dt_surrogate_model, x_preprocessed, y,
-                           target_name="Label",
-                           feature_names=feature_names_selected,
-                           class_names=decoded_class_names)
-            viz.save(dt_surrogate_model_visualization_save_path)
-
-        # SHAP analysis and plotting
-        shap_save_path = os.path.join(explainability_result_path, "SHAP")
-        create_path_if_not_exist(shap_save_path)
-        if preprocessor.label_encoder is not None:
-            decoded_class_names = list(preprocessor.label_encoder.inverse_transform(optimized_model.classes_))
-        else:
-            decoded_class_names = optimized_model.classes_
-
-        plot_shap_features(model=optimized_model,
-                           x=x_preprocessed,
-                           feature_names=feature_names_selected,
-                           index_names=x_preprocessed_df.index,
-                           clf_name=clf,
-                           classes=decoded_class_names,
-                           save_path=shap_save_path,
-                           verbose=True)
+            plot_shap_features(model=optimized_model,
+                               x=x_preprocessed,
+                               feature_names=feature_names_selected,
+                               index_names=x_preprocessed_df.index,
+                               clf_name=clf,
+                               classes=decoded_class_names,
+                               save_path=shap_save_path,
+                               verbose=True)
 
 
 if __name__ == "__main__":
