@@ -9,7 +9,6 @@ Template for binary classifications of tabular data including preprocessing
 # TODO: Add analysis flow diagram to README
 # TODO: Add commandline options /w argparse
 # TODO: ensure that variable names used in savefig() don't contain special characters which can't be used in file name
-# TODO: Add surrogate models (maybe in a second line analysis script)
 # TODO: Add LCE? https://towardsdatascience.com/random-forest-or-xgboost-it-is-time-to-explore-lce-2fed913eafb8
 # TODO: Validate functionality of pickled files after loading
 # TODO: Silence dtreeviz "findfont" warning
@@ -30,6 +29,7 @@ Template for binary classifications of tabular data including preprocessing
 # TODO: Check why some classifiers don't have the same number of measurements for the original models calibration curve
 # TODO: Add Brier scores to output for calibration
 # TODO: Add relevant output to log file in results
+# TODO: Create config file parameters for dimensionality reduction techniques and surrogate model hyperparameters
 
 Input data format specifications:
     - As of now, a file path has to be supplied to the main function as string value for the variable "input_data_path";
@@ -202,6 +202,58 @@ def load_hyperparameters(model, config):
             param_grid[param] = [model.get_params()[param]]
 
     return param_grid
+
+
+def save_cumulative_confusion_matrix(cms, label_names, clf_name, save_path):
+    """
+    Create cumulative confusion matrix from list of matrices and save as CSV and PNG
+
+    :param label_names: list containing names of labels
+    :param clf_name: str indicating name of classifier
+    :param save_path: str indicating folder path to save output files to
+    """
+
+    label_names = sorted(label_names)
+
+    seaborn.heatmap(cms, annot=True, cmap="Blues", fmt="g")
+    plt.xlabel("Predicted")
+    plt.ylabel("Actual")
+    plt.title("{} - Confusion matrix".format(clf_name))
+    plt.savefig(os.path.join(save_path, f"confusion_matrix-{clf_name}.png"))
+    plt.close()
+
+    # Save confusion matrix as CSV
+    cm_df = pd.DataFrame(cms,
+                         columns=[str(name) + " (actual)" for name in label_names],
+                         index=[str(name) + " (predicted)" for name in label_names])
+    cm_df.to_csv(os.path.join(save_path, f"confusion_matrix-{clf_name}.csv"), sep=";")
+
+
+def save_overall_performances(overall_performances, classifier_names, save_path, verbose=True):
+    """
+
+    """
+
+    # Save result table with all classifiers performances
+    colors = ["dimgray", "gray", "darkgray", "silver", "lightgray", "gainsboro", "maroon"]
+    overall_performances.to_csv(os.path.join(save_path, "performances.csv"), sep=";")
+    overall_performances.plot.bar(rot=45, color=colors, figsize=(len(classifier_names) * 1.5, 7))\
+        .legend(loc="upper right")
+
+    if verbose is True:
+        print("[Results] Displaying performance")
+        print(overall_performances)
+
+    # Adjust legend position so it doesn't mask any bars
+    handles = [plt.Rectangle((0, 0), 1, 1, color=color) for color in colors]
+    plt.legend(handles, overall_performances.columns, loc="best", bbox_to_anchor=(1.13, 1.15))
+
+    # Save and display performance plot
+    plt.yticks(np.arange(0, 1.1, 0.1))
+    plt.grid(linestyle="dashed", axis="y")
+    plt.title("Overall performance")
+    plt.savefig(os.path.join(save_path, "performances.png"))
+    plt.close()
 
 
 class Model(object):
@@ -443,17 +495,16 @@ def main():
 
             # Initialize fold-wise feature importance containers for mean and standard deviation with zero values
             if perform_permutation_importance and "raw_importances_foldwise_mean_train" not in locals():
-                raw_importances_foldwise_mean_train = np.zeros((len(feature_names_selected),))
-                raw_importances_foldwise_std_train = np.zeros((len(feature_names_selected),))
-                raw_importances_foldwise_mean_val = np.zeros((len(feature_names_selected),))
-                raw_importances_foldwise_std_val = np.zeros((len(feature_names_selected),))
-
-            if perform_permutation_importance:
+                raw_importances_foldwise = {"mean_train": raw_importances_train.importances_mean,
+                                            "std_train": raw_importances_train.importances_std,
+                                            "mean_val": raw_importances_val.importances_mean,
+                                            "std_val": raw_importances_val.importances_std}
+            else:
                 # Add importance scores to overall container
-                raw_importances_foldwise_mean_train += raw_importances_train.importances_mean
-                raw_importances_foldwise_std_train += raw_importances_train.importances_std
-                raw_importances_foldwise_mean_val += raw_importances_val.importances_mean
-                raw_importances_foldwise_std_val += raw_importances_val.importances_std
+                raw_importances_foldwise["mean_train"] += raw_importances_train.importances_mean
+                raw_importances_foldwise["std_train"] += raw_importances_train.importances_std
+                raw_importances_foldwise["mean_val"] += raw_importances_val.importances_mean
+                raw_importances_foldwise["std_val"] += raw_importances_val.importances_std
 
             # Compute and store performance metrics for fold
             clfs[clf].get_performances(y_test, y_pred)
@@ -478,41 +529,17 @@ def main():
         # Get cumulative confusion matrix
         cms = clfs[clf].overall_performances["cm"]
 
-        # Display and save confusion matrix figure
-        seaborn.heatmap(cms, annot=True, cmap="Blues", fmt="g")
-        plt.xlabel("Predicted")
-        plt.ylabel("Actual")
-        plt.title("{} - Confusion matrix".format(clf))
-        plt.savefig(os.path.join(performance_result_path, f"confusion_matrix-{clf}.png"))
-        plt.close()
+        # Save cumulative confusion matrix as CSV and PNG
+        save_cumulative_confusion_matrix(cms,
+                                         label_names=np.sort(np.unique(y)),
+                                         clf_name=clf,
+                                         save_path=performance_result_path)
 
-        # Save confusion matrix as CSV
-        label_names = np.sort(np.unique(y))
-        cm_df = pd.DataFrame(cms,
-                             columns=[str(name) + " (actual)" for name in label_names],
-                             index=[str(name) + " (predicted)" for name in label_names])
-        cm_df.to_csv(os.path.join(performance_result_path, f"confusion_matrix-{clf}.csv"), sep=";")
-
-    # Save result table with all classifiers performances
-    colors = ["dimgray", "gray", "darkgray", "silver", "lightgray", "gainsboro", "maroon"]
-    overall_performances.to_csv(os.path.join(performance_result_path, "performances.csv"), sep=";")
-    overall_performances.plot.bar(rot=45, color=colors, figsize=(len(classifiers_to_run) * 1.5, 7))\
-        .legend(loc="upper right")
-
-    if verbose is True:
-        print("[Results] Displaying performance")
-        print(overall_performances)
-
-    # Adjust legend position so it doesn't mask any bars
-    handles = [plt.Rectangle((0, 0), 1, 1, color=color) for color in colors]
-    plt.legend(handles, overall_performances.columns, loc="best", bbox_to_anchor=(1.13, 1.15))
-
-    # Save and display performance plot
-    plt.yticks(np.arange(0, 1.1, 0.1))
-    plt.grid(linestyle="dashed", axis="y")
-    plt.title("Overall performance")
-    plt.savefig(os.path.join(performance_result_path, "performances.png".format(clf)))
-    plt.close()
+    # Save overall performance metrics to PNG bar plot and CSV
+    save_overall_performances(overall_performances,
+                              classifier_names=classifiers_to_run,
+                              save_path=performance_result_path,
+                              verbose=True)
 
     # Iterate over classifiers, create final models and apply XAI techniques
     for clf in clfs:
@@ -592,20 +619,20 @@ def main():
 
         if perform_permutation_importance:
             # Get mean of feature importance scores and standard deviation over all folds
-            overall_mean_importances_train = raw_importances_foldwise_mean_train / num_folds
-            overall_std_importances_train = raw_importances_foldwise_std_train / num_folds
-            overall_mean_importances_val = raw_importances_foldwise_mean_val / num_folds
-            overall_std_importances_val = raw_importances_foldwise_std_val / num_folds
+            overall_importances = {metric: raw_importances_foldwise[metric] / num_folds
+                                   for metric in raw_importances_foldwise.keys()}
 
             # Plot feature importances as determined using training and validation data
             plot_title_permutation_importance = f"permutation_importance_{clf}"
+
             importances_save_path = os.path.join(explainability_result_path,
                                                  "Permutation_importances")
             create_path_if_not_exist(importances_save_path)
+
             train_importances_save_path = os.path.join(importances_save_path,
                                                        plot_title_permutation_importance + "-train")
-            plot_importances(importances_mean=overall_mean_importances_train,
-                             importances_std=overall_std_importances_train,
+            plot_importances(importances_mean=overall_importances["mean_train"],
+                             importances_std=overall_importances["std_train"],
                              feature_names=feature_names_selected,
                              plot_title=plot_title_permutation_importance + "-training_data",
                              order_alphanumeric=True,
@@ -615,8 +642,8 @@ def main():
 
             test_importances_save_path = os.path.join(importances_save_path,
                                                       plot_title_permutation_importance + "-test")
-            plot_importances(importances_mean=overall_mean_importances_val,
-                             importances_std=overall_std_importances_val,
+            plot_importances(importances_mean=overall_importances["mean_val"],
+                             importances_std=overall_importances["std_val"],
                              feature_names=feature_names_selected,
                              plot_title=plot_title_permutation_importance + "-validation_data",
                              order_alphanumeric=True,
@@ -625,7 +652,7 @@ def main():
                              save_path=test_importances_save_path)
 
         if perform_partial_dependence_plotting:
-            # Partial dependenced plots (DPD)
+            # Partial dependence plots (DPD)
             pdp_save_path = os.path.join(explainability_result_path, "Partial_dependence_plots")
             create_path_if_not_exist(pdp_save_path)
             plot_partial_dependences(model=optimized_model,
